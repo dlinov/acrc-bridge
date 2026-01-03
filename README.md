@@ -5,7 +5,7 @@ RaceChrono has support for Assetto Corsa, but Assetto Corsa cannot send GPS-corr
 Idea is simple: read data from AC, find track GPS coordinates, map it to in-game coordinates and republish AC telemetry in the same format, but with correct GPS
 
 ### Requirements
-- .NET 9 SDK: `winget install Microsoft.DotNet.SDK.9`
+- .NET 10 SDK: `winget install Microsoft.DotNet.SDK.10`
 
 ### Useful links
 - [RaceChrono forum thread "Assetto Corsa?"](https://racechrono.com/forum/discussion/1892/assetto-corsa)
@@ -22,7 +22,7 @@ Idea is simple: read data from AC, find track GPS coordinates, map it to in-game
 The workflow is in `.github/workflows/dotnet-desktop.yml` (named **CI** in Actions).
 
 ### Creating a release
-Releases are tag-based (recommended). After your changes are on `master` and CI is green, create and push a tag like:
+Releases are tag-based. After your changes are on `master` and CI is green, create and push a tag like:
 
 ```bash
 git tag v0.1.0
@@ -32,6 +32,6 @@ git push origin v0.1.0
 Pushing the tag triggers `.github/workflows/release.yml`, which builds + tests again and then creates a GitHub Release with:
 - `ACRCBridge.App-v0.1.0-linux-x64.tar.gz`
 - `ACRCBridge.App-v0.1.0-linux-arm64.tar.gz`
-- `ACRCBridge.App-v0.1.0-win-x64.tar.gz`
-- `ACRCBridge.App-v0.1.0-win-arm64.tar.gz`
+- `ACRCBridge.App-v0.1.0-win-x64.zip`
+- `ACRCBridge.App-v0.1.0-win-arm64.zip`
 attached.
