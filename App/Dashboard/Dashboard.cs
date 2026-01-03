@@ -1,4 +1,4 @@
-﻿namespace ACRCBridge.ConsoleApp.Dashboard;
+﻿namespace ACRCBridge.App.Dashboard;
 
 internal static class Dashboard
 {

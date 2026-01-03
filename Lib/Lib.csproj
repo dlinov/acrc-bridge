@@ -4,13 +4,14 @@
     <OutputType>Library</OutputType>
     <TargetFramework>net9.0</TargetFramework>
     <RootNamespace>ACRCBridge.Lib</RootNamespace>
+    <AssemblyName>ACRCBridge.Lib</AssemblyName>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
-      <_Parameter1>Lib.Tests</_Parameter1>
+      <_Parameter1>ACRCBridge.Lib.Tests</_Parameter1>
     </AssemblyAttribute>
   </ItemGroup>
 

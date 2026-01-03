@@ -3,7 +3,13 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
-    <RootNamespace>ACRCBridge.ConsoleApp</RootNamespace>
+    <RootNamespace>ACRCBridge.App</RootNamespace>
+    <!-- Controls the actual output binary name (exe on Windows, no extension on Linux). -->
+    <AssemblyName>ACRCBridge.App</AssemblyName>
+    <!-- Optional but keeps assembly metadata consistent. -->
+    <AssemblyTitle>ACRCBridge.App</AssemblyTitle>
+    <Company>ACRCBridge</Company>
+    <Product>ACRC Bridge</Product>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

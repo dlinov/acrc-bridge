@@ -32,7 +32,7 @@ public sealed class RaceChronoPublisher : ITelemetryPublisher
 
     public event Action<string>? Status;
 
-    public Task Start(CancellationToken token)
+    public Task StartAsync(CancellationToken token)
     {
         Status?.Invoke("Starting RaceChrono telemetry publisher");
         if (Interlocked.Exchange(ref _started, 1) == 1)

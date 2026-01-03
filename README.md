@@ -15,5 +15,23 @@ Idea is simple: read data from AC, find track GPS coordinates, map it to in-game
 - [Assetto Corsa Remote Telemetry Client](https://github.com/rickwest/ac-remote-telemetry-client) by [@rickwest](https://github.com/rickwest)
 
 ### TODO
-- Github build and releases
 - Wiki/Instruction how to use with screenshots
+- [Issues tab](https://github.com/dlinov/acrc-bridge/issues)
+
+### CI
+The workflow is in `.github/workflows/dotnet-desktop.yml` (named **CI** in Actions).
+
+### Creating a release
+Releases are tag-based (recommended). After your changes are on `master` and CI is green, create and push a tag like:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Pushing the tag triggers `.github/workflows/release.yml`, which builds + tests again and then creates a GitHub Release with:
+- `ACRCBridge.App-v0.1.0-linux-x64.tar.gz`
+- `ACRCBridge.App-v0.1.0-linux-arm64.tar.gz`
+- `ACRCBridge.App-v0.1.0-win-x64.tar.gz`
+- `ACRCBridge.App-v0.1.0-win-arm64.tar.gz`
+attached.
