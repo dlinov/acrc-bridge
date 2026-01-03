@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-test-publish:
+    name: Build, test, publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+          cache: true
+          cache-dependency-path: |
+            **/packages.lock.json
+            **/*.csproj
+            Directory.Packages.props
+
+      - name: Restore
+        run: dotnet restore Lib.Tests/Lib.Tests.csproj
+
+      - name: Build
+        run: |
+          dotnet build App/App.csproj -c Release --no-restore
+          dotnet build Lib.Tests/Lib.Tests.csproj -c Release --no-restore
+
+      - name: Test
+        run: dotnet test Lib.Tests/Lib.Tests.csproj -c Release --no-build --logger "trx" --results-directory "TestResults"
+
+      - name: Publish (linux-arm64)
+        run: dotnet publish App/App.csproj -c Release -r linux-arm64 --self-contained true -o dist/ACRCBridge.App/linux-arm64
+
+      - name: Publish (win-x64)
+        run: dotnet publish App/App.csproj -c Release -r win-x64 --self-contained true -o dist/ACRCBridge.App/win-x64
+
+      - name: Publish (win-arm64)
+        run: dotnet publish App/App.csproj -c Release -r win-arm64 --self-contained true -o dist/ACRCBridge.App/win-arm64
+
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          mkdir -p release
+
+          # Linux \=\> \.tar\.gz
+          for rid in linux-x64 linux-arm64; do
+            tar -C dist/ACRCBridge.App -czf "release/ACRCBridge.App-${TAG}-${rid}.tar.gz" "${rid}"
+          done
+
+          # Windows \=\> \.zip
+          for rid in win-x64 win-arm64; do
+            ( cd "dist/ACRCBridge.App" && zip -r "../../release/ACRCBridge.App-${TAG}-${rid}.zip" "${rid}" )
+          done
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          files: |
+            release/*.tar.gz
+            release/*.zip
+          fail_on_unmatched_files: true

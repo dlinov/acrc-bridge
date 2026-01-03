@@ -1,6 +1,6 @@
 ﻿using ACRCBridge.Lib.Dto;
 
-namespace ACRCBridge.ConsoleApp.Dashboard;
+namespace ACRCBridge.App.Dashboard;
 
 internal readonly record struct DashboardSnapshot(
     string Status,

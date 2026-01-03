@@ -1,4 +1,4 @@
-﻿using ACRCBridge.ConsoleApp.Dashboard;
+﻿using ACRCBridge.App.Dashboard;
 using ACRCBridge.Lib.RaceChrono;
 using ACRCBridge.Lib.AssettoCorsa.Udp;
 using ACRCBridge.Lib.Coordinates;
@@ -54,8 +54,8 @@ acTelemetryListener.Connected += info => state.SetConnection(info);
 acTelemetryListener.CarUpdate += update => state.SetCar(update);
 acTelemetryListener.LapEvent += lap => state.SetLap(lap);
 
-var readerTask = acTelemetryListener.Start(cts.Token);
-var pubTask = rcTelemetryPublisher.Start(cts.Token);
+var readerTask = acTelemetryListener.StartAsync(cts.Token);
+var pubTask = rcTelemetryPublisher.StartAsync(cts.Token);
 var uiTask = Dashboard.RunDashboardAsync(state, cts.Token);
 
 try

@@ -23,9 +23,9 @@ public class ACUdpReader(GeoConvertersCollection coordinateConverters) : ITeleme
     
     private static readonly IPEndPoint ACEndPoint = new(IPAddress.Loopback, ACServerPort);
 
-    public Task Start(CancellationToken token)
+    public Task StartAsync(CancellationToken token)
     {
-        return Task.Run(async () => await ReadLoopAsync(token), token);
+        return ReadLoopAsync(token);
     }
 
     private async Task ReadLoopAsync(CancellationToken token)
