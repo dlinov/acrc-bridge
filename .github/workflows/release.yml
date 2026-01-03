@@ -31,23 +31,26 @@ jobs:
         run: dotnet restore acrc-bridge.slnx
 
       - name: Build
-        run: |
-          dotnet build acrc-bridge.slnx -c Release --no-restore
+        run: dotnet build acrc-bridge.slnx -c Release --no-restore
 
       - name: Test
         run: dotnet test acrc-bridge.slnx -c Release --no-build --logger "trx" --results-directory "TestResults"
 
-      - name: Publish (linux-x64)
-        run: dotnet publish App/App.csproj -c Release -r linux-x64 --self-contained true -o dist/ACRCBridge.App/linux-x64
-
-      - name: Publish (linux-arm64)
-        run: dotnet publish App/App.csproj -c Release -r linux-arm64 --self-contained true -o dist/ACRCBridge.App/linux-arm64
-
-      - name: Publish (win-x64)
-        run: dotnet publish App/App.csproj -c Release -r win-x64 --self-contained true -o dist/ACRCBridge.App/win-x64
-
-      - name: Publish (win-arm64)
-        run: dotnet publish App/App.csproj -c Release -r win-arm64 --self-contained true -o dist/ACRCBridge.App/win-arm64
+      - name: Publish self-contained binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          for rid in linux-x64 linux-arm64 win-x64 win-arm64; do
+            dotnet publish App/App.csproj -c Release -r "${rid}" --self-contained true \
+              -o "dist/ACRCBridge.App/${rid}" \
+              /p:PublishTrimmed=true \
+              /p:TrimMode=partial \
+              /p:PublishReadyToRun=false \
+              /p:PublishSingleFile=true \
+              /p:EnableCompressionInSingleFile=true \
+              /p:InvariantGlobalization=true \
+              /p:DebugType=None
+          done
 
       - name: Package
         shell: bash
