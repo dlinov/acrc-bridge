@@ -37,6 +37,9 @@ jobs:
       - name: Test
         run: dotnet test acrc-bridge.slnx -c Release --no-build --logger "trx" --results-directory "TestResults"
 
+      - name: Publish (linux-x64)
+        run: dotnet publish App/App.csproj -c Release -r linux-x64 --self-contained true -o dist/ACRCBridge.App/linux-x64
+
       - name: Publish (linux-arm64)
         run: dotnet publish App/App.csproj -c Release -r linux-arm64 --self-contained true -o dist/ACRCBridge.App/linux-arm64
 
