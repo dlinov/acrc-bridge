@@ -28,15 +28,14 @@ jobs:
             Directory.Packages.props
 
       - name: Restore
-        run: dotnet restore Lib.Tests/Lib.Tests.csproj
+        run: dotnet restore acrc-bridge.slnx
 
       - name: Build
         run: |
-          dotnet build App/App.csproj -c Release --no-restore
-          dotnet build Lib.Tests/Lib.Tests.csproj -c Release --no-restore
+          dotnet build acrc-bridge.slnx -c Release --no-restore
 
       - name: Test
-        run: dotnet test Lib.Tests/Lib.Tests.csproj -c Release --no-build --logger "trx" --results-directory "TestResults"
+        run: dotnet test acrc-bridge.slnx -c Release --no-build --logger "trx" --results-directory "TestResults"
 
       - name: Publish (linux-arm64)
         run: dotnet publish App/App.csproj -c Release -r linux-arm64 --self-contained true -o dist/ACRCBridge.App/linux-arm64
