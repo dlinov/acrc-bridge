@@ -3,5 +3,7 @@
 internal sealed record AssettoCorsaConfig(
     string Host,
     int Port,
-    TimeSpan HandshakeTimeout,
+    bool InvertClutch,
+    TimeSpan HandshakeWaitTimeout,
+    TimeSpan HandshakeRetryTimeout,
     TimeSpan IdleTimeout);

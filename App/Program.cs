@@ -32,11 +32,13 @@ var convertersCollection = new GeoConvertersCollection(trackDtos);
 
 var state = new DashboardState();
 var acTelemetryListener = new ACUdpReader(
-    acConfig.Host,
-    acConfig.Port,
-    acConfig.HandshakeTimeout,
-    acConfig.IdleTimeout,
-    convertersCollection);
+    acHost: acConfig.Host,
+    acPort: acConfig.Port,
+    invertClutch: acConfig.InvertClutch,
+    handshakeWaitTimeout: acConfig.HandshakeWaitTimeout,
+    handshakeRetryTimeout: acConfig.HandshakeRetryTimeout,
+    idleTimeout: acConfig.IdleTimeout,
+    coordinateConverters: convertersCollection);
 var rcTelemetryPublisher = new RaceChronoPublisher(bridgePort, acTelemetryListener);
 acTelemetryListener.Status += msg => state.SetStatus(msg);
 rcTelemetryPublisher.Status += msg => state.SetServerStatus(msg);

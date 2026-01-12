@@ -10,7 +10,9 @@ namespace ACRCBridge.Lib.AssettoCorsa.Udp;
 public sealed class ACUdpReader(
     string acHost,
     int acPort,
-    TimeSpan handshakeTimeout,
+    bool invertClutch,
+    TimeSpan handshakeWaitTimeout,
+    TimeSpan handshakeRetryTimeout,
     TimeSpan idleTimeout,
     GeoConvertersCollection coordinateConverters
 ) : ITelemetryListener
@@ -63,7 +65,7 @@ public sealed class ACUdpReader(
                     try
                     {
                         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
-                        timeoutCts.CancelAfter(handshakeTimeout);
+                        timeoutCts.CancelAfter(handshakeWaitTimeout);
 
                         var handshakeResult = await udpClient.ReceiveAsync(timeoutCts.Token).ConfigureAwait(false);
                         var response = Deserialize<HandshakeResponse>(handshakeResult.Buffer);
@@ -85,8 +87,8 @@ public sealed class ACUdpReader(
                     }
                     catch (OperationCanceledException) when (!token.IsCancellationRequested)
                     {
-                        Status?.Invoke("No response from AC. Retrying in 5s...");
-                        await Task.Delay(5000, token).ConfigureAwait(false);
+                        Status?.Invoke($"No response from AC. Retrying in {handshakeRetryTimeout}...");
+                        await Task.Delay(handshakeRetryTimeout, token).ConfigureAwait(false);
                     }
                 }
 
@@ -134,7 +136,7 @@ public sealed class ACUdpReader(
                             LapCount: info.LapCount,
                             Gas: info.Gas,
                             Brake: info.Brake,
-                            Clutch: info.Clutch,
+                            Clutch: invertClutch ? 1 - info.Clutch : info.Clutch,
                             PosX: info.CarCoordinatesX,
                             PosY: info.CarCoordinatesY,
                             PosZ: info.CarCoordinatesZ,
