@@ -106,7 +106,7 @@ internal static class Dashboard
             WriteAt(SpeedRow, $"Speed: {carValue.SpeedKmh,6:F1} km/h {bar}".PadRight(width));
             WriteAt(RpmGearRow, $"RPM: {carValue.EngineRpm,6:F0}  Gear: {carValue.Gear,2}".PadRight(width));
             WriteAt(PositionRow,
-                $"Position: X={posX} Y={posY} Z={posZ} | Normalized poisition: {posNorm} | Slope: {slope}"
+                $"Position: X={posX} Y={posY} Z={posZ} | Normalized position: {posNorm} | Slope: {slope}"
                     .PadRight(width));
             WriteAt(LapRow2,
                 $"Current lap: {currLap} | Best lap: {bestLap} | Previous lap: {prevLap} | Lap count: {lapCount}"
