@@ -2,30 +2,35 @@
 
 internal static class Dashboard
 {
-    const int TitleRow = 0;
-    const int StatusRow = 1;
-    const int ConnectionRow = 2;
-    const int ServerStatusRow = 3;
-    const int ExpectedSizesRow = 4;
-    const int SpeedRow = 5;
-    const int RpmGearRow = 6;
-    const int PositionRow = 7;
-    const int GasRow = 8;
-    const int BrakeRow = 9;
-    const int ClutchRow = 10;
-    const int LapRow2 = 11;
-    const int LapRow = 12;
-    const int DashboardRowCount = LapRow + 1;
+    private const int TitleRow = 0;
+    private const int StatusRow = 1;
+    private const int ConnectionRow = 2;
+    private const int ServerStatusRow = 3;
+    // private const int ReservedRow = 4;
+    private const int SpeedRow = 5;
+    private const int RpmGearRow = 6;
+    private const int PositionRow = 7;
+    private const int GasRow = 8;
+    private const int BrakeRow = 9;
+    private const int ClutchRow = 10;
+    private const int LapRow2 = 11;
+    private const int LapRow = 12;
+    private const int DashboardRowCount = LapRow + 1;
 
     public static async Task RunDashboardAsync(DashboardState state, CancellationToken token)
     {
-        if (!OperatingSystem.IsWindows())
+        if (Console.IsOutputRedirected)
         {
+            // Don't run dashboard if output is redirected (e.g., to a file).
             return;
         }
 
-        var oldCursorVisible = Console.CursorVisible;
-        Console.CursorVisible = false;
+        var oldCursorVisible = true;
+        if (OperatingSystem.IsWindows())
+        {
+            oldCursorVisible = Console.CursorVisible;
+            Console.CursorVisible = false;
+        }
 
         // Clear whole screen (cls) once before drawing the fixed dashboard area.
         // Doing this every frame would flicker.
@@ -44,27 +49,30 @@ internal static class Dashboard
             Render(snapshot);
         }
 
-        Console.CursorVisible = oldCursorVisible;
+        if (OperatingSystem.IsWindows())
+        {
+            Console.CursorVisible = oldCursorVisible;
+        }
+
         Console.Clear();
     }
 
-    static void Render(DashboardSnapshot s)
+    private static void Render(DashboardSnapshot s)
     {
         var width = Math.Max(40, Console.WindowWidth);
 
-        WriteAt(TitleRow, "ACRCBridge Live Telemetry".PadRight(width));
-        WriteAt(StatusRow, $"AC Status: {s.Status}".PadRight(width));
-        WriteAt(ServerStatusRow, $"RC Status: {s.ServerStatus}".PadRight(width));
-
         var conn = s.Connection;
-        var connLine = conn is null
+        var connLine = conn is null or {IsConnected: false}
             ? "AC Connection: (waiting for Assetto Corsa...)"
             : $"AC Connection: {conn.Value.DriverName} | {conn.Value.CarName} | {conn.Value.TrackName} [{conn.Value.TrackConfig}]";
-        WriteAt(ConnectionRow, connLine.PadRight(width));
+        var gameServerLine = conn is null or {IsConnected: false}
+            ? string.Empty
+            : $" Server: ID={conn.Value.ServerIdentifier}, version={conn.Value.ServerVersion}";
 
-        WriteAt(ExpectedSizesRow,
-            $"Expected sizes: HandshakeResponse={s.ExpectedHandshakeResponseSize} RTCarInfo={s.ExpectedRTCarInfoSize} RTLap={s.ExpectedRTLapSize}"
-                .PadRight(width));
+        WriteAt(TitleRow, "ACRCBridge Live Telemetry".PadRight(width));
+        WriteAt(StatusRow, $"AC Status: {s.Status} {gameServerLine}".PadRight(width));
+        WriteAt(ServerStatusRow, $"RC Status: {s.ServerStatus}".PadRight(width));
+        WriteAt(ConnectionRow, connLine.PadRight(width));
 
         var car = s.Car;
         if (car is null)
@@ -97,7 +105,7 @@ internal static class Dashboard
             WriteAt(SpeedRow, $"Speed: {carValue.SpeedKmh,6:F1} km/h {bar}".PadRight(width));
             WriteAt(RpmGearRow, $"RPM: {carValue.EngineRpm,6:F0}  Gear: {carValue.Gear,2}".PadRight(width));
             WriteAt(PositionRow,
-                $"Position: X={posX} Y={posY} Z={posZ} | Normalized poisition: {posNorm} | Slope: {slope}"
+                $"Position: X={posX} Y={posY} Z={posZ} | Normalized position: {posNorm} | Slope: {slope}"
                     .PadRight(width));
             WriteAt(LapRow2,
                 $"Current lap: {currLap} | Best lap: {bestLap} | Previous lap: {prevLap} | Lap count: {lapCount}"
@@ -121,7 +129,7 @@ internal static class Dashboard
         }
     }
 
-    static string FormatLapTimeMs(int milliseconds)
+    private static string FormatLapTimeMs(int milliseconds)
     {
         if (milliseconds <= 0)
         {
@@ -133,14 +141,14 @@ internal static class Dashboard
         return $"{minutes:00}:{ts.Seconds:00}.{ts.Milliseconds:000}";
     }
 
-    static string ProgressBar(float progress01, int width)
+    private static string ProgressBar(float progress01, int width)
     {
         progress01 = Math.Clamp(progress01, 0f, 1f);
         var filled = (int)Math.Round(progress01 * width);
         return "[" + new string('#', filled) + new string('-', Math.Max(0, width - filled)) + "]";
     }
 
-    static void WriteAt(int row, string text)
+    private static void WriteAt(int row, string text)
     {
         // Avoid exceptions when console is resized too small.
         if (row < 0) return;

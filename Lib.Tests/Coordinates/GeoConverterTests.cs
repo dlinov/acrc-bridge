@@ -16,8 +16,9 @@ public sealed class GeoConverterTests
             .SetBasePath(AppContext.BaseDirectory)
             .AddJsonFile("appsettings.Test.json", optional: false)
             .Build();
-        var tracksSection = config.GetSection("TracksCoordinates");
-        _converters = new GeoConvertersCollection(tracksSection);
+        var tracks = config.GetSection("Tracks").Get<IDictionary<string, TrackReferencePoints>>();
+        Assert.IsNotNull(tracks);
+        _converters = new GeoConvertersCollection(tracks);
     }
 
     [TestMethod]

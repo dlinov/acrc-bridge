@@ -1,5 +1,4 @@
 ﻿using ACRCBridge.Lib.Dto;
-using Microsoft.Extensions.Configuration;
 
 namespace ACRCBridge.Lib.Coordinates;
 
@@ -7,11 +6,8 @@ public class GeoConvertersCollection
 {
     private readonly Dictionary<string, GeoConverter> _converters = new();
 
-    public GeoConvertersCollection(IConfigurationSection section)
+    public GeoConvertersCollection(IDictionary<string, TrackReferencePoints> tracks)
     {
-        var tracks = section.Get<Dictionary<string, TrackReferencePoints>>()
-                     ?? throw new InvalidOperationException("No track reference points found in configuration.");
-
         foreach (var (trackName, points) in tracks)
         {
             if (points.Point0 is null || points.Point1 is null)

@@ -7,10 +7,19 @@ using ACRCBridge.Lib.Coordinates;
 
 namespace ACRCBridge.Lib.AssettoCorsa.Udp;
 
-public class ACUdpReader(GeoConvertersCollection coordinateConverters) : ITelemetryListener
+public sealed class ACUdpReader(
+    string acHost,
+    int acPort,
+    bool invertClutch,
+    TimeSpan handshakeWaitTimeout,
+    TimeSpan handshakeRetryTimeout,
+    TimeSpan idleTimeout,
+    GeoConvertersCollection coordinateConverters
+) : ITelemetryListener
 {
-    private const int ACServerPort = 9996; // AC listens on this port
+    private readonly IPEndPoint _acEndPoint = new(IPAddress.Parse(acHost), acPort);
 
+    // may be used for debugging purposes
     public static int ExpectedHandshakeResponseSize => Marshal.SizeOf<HandshakeResponse>();
     public static int ExpectedRTCarInfoSize => Marshal.SizeOf<RTCarInfo>();
     public static int ExpectedRTLapSize => Marshal.SizeOf<RTLap>();
@@ -20,138 +29,163 @@ public class ACUdpReader(GeoConvertersCollection coordinateConverters) : ITeleme
     public event Action<CarUpdate>? CarUpdate;
     public event Action<LapEvent>? LapEvent;
     public event Action<Exception>? Error;
-    
-    private static readonly IPEndPoint ACEndPoint = new(IPAddress.Loopback, ACServerPort);
 
-    public Task StartAsync(CancellationToken token)
-    {
-        return ReadLoopAsync(token);
-    }
+    public Task StartAsync(CancellationToken token) => ReadLoopAsync(token);
 
     private async Task ReadLoopAsync(CancellationToken token)
     {
         Status?.Invoke("Starting AC UDP listener...");
-        // Bind to any available port, don't use 9996 as that's what AC uses
-        using var udpClient = new UdpClient();
 
-        // Fix for "An existing connection was forcibly closed by the remote host" on Windows
-        // This happens when the previous send resulted in an ICMP Port Unreachable message
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        // Session loop: handshake -> subscribe -> receive until idle/cancel -> dismiss -> repeat
+        while (!token.IsCancellationRequested)
         {
-            const int SIO_UDP_CONNRESET = -1744830452;
-            udpClient.Client.IOControl(SIO_UDP_CONNRESET, [0], null);
-            // TODO: should udpServer be added here as well?
-        }
+            // Bind to any available port, don't use 9996 as that's what AC uses
+            using var udpClient = new UdpClient();
 
-        var trackName = string.Empty;
-
-        try
-        {
-            // 1. Handshake Loop
-            while (!token.IsCancellationRequested)
+            // Fix for "An existing connection was forcibly closed by the remote host" on Windows
+            // This happens when the previous send resulted in an ICMP Port Unreachable message
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                await SendHandshakeAsync(udpClient, ACEndPoint);
-
-                try
-                {
-                    // Wait for response with 1 second timeout
-                    using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
-                    timeoutCts.CancelAfter(1000);
-
-                    var handshakeResult = await udpClient.ReceiveAsync(timeoutCts.Token);
-                    var response = Deserialize<HandshakeResponse>(handshakeResult.Buffer);
-                    trackName = response.TrackName;
-
-                    Connected?.Invoke(new ConnectionInfo(
-                        DriverName: response.DriverName,
-                        CarName: response.CarName,
-                        TrackName: response.TrackName,
-                        TrackConfig: response.TrackConfig,
-                        ServerIdentifier: response.Identifier,
-                        ServerVersion: response.Version));
-
-                    Status?.Invoke("Connected.");
-                    break; // Connected!
-                }
-                catch (OperationCanceledException) when (!token.IsCancellationRequested)
-                {
-                    Status?.Invoke("No response from AC. Retrying in 5s...");
-                    await Task.Delay(5000, token);
-                }
+                const int SIO_UDP_CONNRESET = -1744830452;
+                udpClient.Client.IOControl(SIO_UDP_CONNRESET, [0], null);
+                // TODO: should udpServer be added here as well?
             }
 
-            if (token.IsCancellationRequested) return;
+            var trackName = string.Empty;
+            var connected = false;
+            var shouldDismiss = false;
 
-            // 3. Subscribe to updates
-            Status?.Invoke("Subscribing to updates...");
-            await SendSubscribeUpdateAsync(udpClient, ACEndPoint);
-            await SendSubscribeSpotAsync(udpClient, ACEndPoint);
-            Status?.Invoke("Subscribed.");
-
-            // 4. Process updates
-            while (!token.IsCancellationRequested)
+            try
             {
-                var result = await udpClient.ReceiveAsync(token);
+                // 1. Handshake Loop
+                while (!token.IsCancellationRequested)
+                {
+                    await SendHandshakeAsync(udpClient, _acEndPoint).ConfigureAwait(false);
 
-                if (result.Buffer.Length == Marshal.SizeOf<RTCarInfo>())
-                {
-                    var info = Deserialize<RTCarInfo>(result.Buffer);
-                    var coordinatesConverter = coordinateConverters.GetConverter(trackName);
-                    var gps = coordinatesConverter.FromGameCoordinates(
-                        info.CarCoordinatesX,
-                        info.CarCoordinatesZ);
-                    info.CarCoordinatesX = (float)gps.Latitude;
-                    info.CarCoordinatesZ = (float)gps.Longitude;
-                    CarUpdate?.Invoke(new CarUpdate(
-                        SpeedKmh: info.SpeedKmh,
-                        EngineRpm: info.EngineRPM,
-                        Gear: info.Gear,
-                        LapTime: info.LapTime,
-                        LastLap: info.LastLap,
-                        BestLap: info.BestLap,
-                        LapCount: info.LapCount,
-                        Gas: info.Gas,
-                        Brake: info.Brake,
-                        Clutch: info.Clutch,
-                        PosX: info.CarCoordinatesX,
-                        PosY: info.CarCoordinatesY,
-                        PosZ: info.CarCoordinatesZ,
-                        Slope: info.CarSlope,
-                        PosNormalized: info.CarPositionNormalized,
-                        AccGVertical: info.AccGVertical,
-                        AccGHorizontal: info.AccGHorizontal,
-                        AccGFrontal: info.AccGFrontal));
+                    try
+                    {
+                        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+                        timeoutCts.CancelAfter(handshakeWaitTimeout);
+
+                        var handshakeResult = await udpClient.ReceiveAsync(timeoutCts.Token).ConfigureAwait(false);
+                        var response = Deserialize<HandshakeResponse>(handshakeResult.Buffer);
+                        trackName = response.TrackName;
+
+                        Connected?.Invoke(new ConnectionInfo(
+                            IsConnected: true,
+                            DriverName: response.DriverName,
+                            CarName: response.CarName,
+                            TrackName: response.TrackName,
+                            TrackConfig: response.TrackConfig,
+                            ServerIdentifier: response.Identifier,
+                            ServerVersion: response.Version));
+
+                        Status?.Invoke("Connected.");
+                        connected = true;
+                        shouldDismiss = true;
+                        break; // Connected!
+                    }
+                    catch (OperationCanceledException) when (!token.IsCancellationRequested)
+                    {
+                        Status?.Invoke($"No response from AC. Retrying in {handshakeRetryTimeout}...");
+                        await Task.Delay(handshakeRetryTimeout, token).ConfigureAwait(false);
+                    }
                 }
-                else if (result.Buffer.Length == Marshal.SizeOf<RTLap>())
+
+                if (!connected || token.IsCancellationRequested)
+                    continue;
+
+                // 3. Subscribe to updates
+                Status?.Invoke("Subscribing to updates...");
+                await SendSubscribeUpdateAsync(udpClient, _acEndPoint).ConfigureAwait(false);
+                await SendSubscribeSpotAsync(udpClient, _acEndPoint).ConfigureAwait(false);
+                Status?.Invoke("Subscribed.");
+
+                // 4. Process updates
+                while (!token.IsCancellationRequested)
                 {
-                    var lap = Deserialize<RTLap>(result.Buffer);
-                    LapEvent?.Invoke(new LapEvent(
-                        CarIdentifierNumber: lap.CarIdentifierNumber,
-                        Lap: lap.Lap,
-                        DriverName: lap.DriverName,
-                        CarName: lap.CarName,
-                        Time: lap.Time));
-                }
-                else
-                {
-                    Status?.Invoke($"Unknown data length: {result.Buffer.Length} bytes");
+                    var receiveTask = udpClient.ReceiveAsync(token).AsTask();
+                    var timeoutTask = Task.Delay(idleTimeout, token);
+                    var finished = await Task.WhenAny(receiveTask, timeoutTask).ConfigureAwait(false);
+
+                    if (finished == timeoutTask)
+                    {
+                        // No data received for a while -> treat it as race stopped
+                        Status?.Invoke($"No data for {idleTimeout.TotalSeconds:0}s. Reconnecting...");
+                        Connected?.Invoke(ConnectionInfo.Disconnected);
+                        break;
+                    }
+
+                    var result = await receiveTask.ConfigureAwait(false);
+                    if (result.Buffer.Length == Marshal.SizeOf<RTCarInfo>())
+                    {
+                        var info = Deserialize<RTCarInfo>(result.Buffer);
+                        var coordinatesConverter = coordinateConverters.GetConverter(trackName);
+                        var gps = coordinatesConverter.FromGameCoordinates(
+                            info.CarCoordinatesX,
+                            info.CarCoordinatesZ);
+                        info.CarCoordinatesX = (float)gps.Latitude;
+                        info.CarCoordinatesZ = (float)gps.Longitude;
+                        CarUpdate?.Invoke(new CarUpdate(
+                            SpeedKmh: info.SpeedKmh,
+                            EngineRpm: info.EngineRPM,
+                            Gear: info.Gear,
+                            LapTime: info.LapTime,
+                            LastLap: info.LastLap,
+                            BestLap: info.BestLap,
+                            LapCount: info.LapCount,
+                            Gas: info.Gas,
+                            Brake: info.Brake,
+                            Clutch: invertClutch ? 1 - info.Clutch : info.Clutch,
+                            PosX: info.CarCoordinatesX,
+                            PosY: info.CarCoordinatesY,
+                            PosZ: info.CarCoordinatesZ,
+                            Slope: info.CarSlope,
+                            PosNormalized: info.CarPositionNormalized,
+                            AccGVertical: info.AccGVertical,
+                            AccGHorizontal: info.AccGHorizontal,
+                            AccGFrontal: info.AccGFrontal));
+                    }
+                    else if (result.Buffer.Length == Marshal.SizeOf<RTLap>())
+                    {
+                        var lap = Deserialize<RTLap>(result.Buffer);
+                        LapEvent?.Invoke(new LapEvent(
+                            CarIdentifierNumber: lap.CarIdentifierNumber,
+                            Lap: lap.Lap,
+                            DriverName: lap.DriverName,
+                            CarName: lap.CarName,
+                            Time: lap.Time));
+                    }
+                    else
+                    {
+                        Status?.Invoke($"Unknown data length: {result.Buffer.Length} bytes");
+                    }
                 }
             }
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected when token is cancelled
-            // Try to dismiss connection
-            try 
+            catch (OperationCanceledException)
             {
-                await SendSubscribeDismissAsync(udpClient, ACEndPoint);
+                // Expected when token is canceled
             }
-            catch { /* Ignore errors during shutdown */ }
-        }
-        catch (Exception ex)
-        {
-            Error?.Invoke(ex);
-            Status?.Invoke($"Error: {ex.Message}");
+            catch (Exception ex)
+            {
+                Error?.Invoke(ex);
+                Status?.Invoke($"Error: {ex.Message}");
+            }
+            finally
+            {
+                // If we successfully connected/subscribed, try to dismiss before reconnecting/shutting down.
+                if (shouldDismiss)
+                {
+                    try
+                    {
+                        await SendSubscribeDismissAsync(udpClient, _acEndPoint).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        // Ignore errors during shutdown/reconnect.
+                    }
+                }
+            }
         }
 
         Status?.Invoke("Stopped AC UDP listener 🏁");
@@ -164,7 +198,7 @@ public class ACUdpReader(GeoConvertersCollection coordinateConverters) : ITeleme
     }
 
     private static Task SendSubscribeUpdateAsync(UdpClient udp, IPEndPoint endPoint)
-    {        
+    {
         return SendOperationAsync(udp, endPoint, (int)OperationId.SUBSCRIBE_UPDATE);
     }
 
@@ -182,7 +216,7 @@ public class ACUdpReader(GeoConvertersCollection coordinateConverters) : ITeleme
     {
         var handshake = new Handshake { Identifier = 1, Version = 1, OperationId = operationId };
         var buffer = Serialize(handshake);
-        await udp.SendAsync(buffer, buffer.Length, endPoint);
+        await udp.SendAsync(buffer, buffer.Length, endPoint).ConfigureAwait(false);
     }
 
     private static byte[] Serialize<T>(T data) where T : struct
