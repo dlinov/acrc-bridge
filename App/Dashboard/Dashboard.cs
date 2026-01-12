@@ -6,7 +6,7 @@ internal static class Dashboard
     private const int StatusRow = 1;
     private const int ConnectionRow = 2;
     private const int ServerStatusRow = 3;
-    private const int ExpectedSizesRow = 4;
+    // private const int ReservedRow = 4;
     private const int SpeedRow = 5;
     private const int RpmGearRow = 6;
     private const int PositionRow = 7;
@@ -61,19 +61,18 @@ internal static class Dashboard
     {
         var width = Math.Max(40, Console.WindowWidth);
 
-        WriteAt(TitleRow, "ACRCBridge Live Telemetry".PadRight(width));
-        WriteAt(StatusRow, $"AC Status: {s.Status}".PadRight(width));
-        WriteAt(ServerStatusRow, $"RC Status: {s.ServerStatus}".PadRight(width));
-
         var conn = s.Connection;
-        var connLine = conn is null
+        var connLine = conn is null or {IsConnected: false}
             ? "AC Connection: (waiting for Assetto Corsa...)"
             : $"AC Connection: {conn.Value.DriverName} | {conn.Value.CarName} | {conn.Value.TrackName} [{conn.Value.TrackConfig}]";
-        WriteAt(ConnectionRow, connLine.PadRight(width));
+        var gameServerLine = conn is null or {IsConnected: false}
+            ? string.Empty
+            : $" Server: ID={conn.Value.ServerIdentifier}, version={conn.Value.ServerVersion}";
 
-        WriteAt(ExpectedSizesRow,
-            $"Expected sizes: HandshakeResponse={s.ExpectedHandshakeResponseSize} RTCarInfo={s.ExpectedRTCarInfoSize} RTLap={s.ExpectedRTLapSize}"
-                .PadRight(width));
+        WriteAt(TitleRow, "ACRCBridge Live Telemetry".PadRight(width));
+        WriteAt(StatusRow, $"AC Status: {s.Status} {gameServerLine}".PadRight(width));
+        WriteAt(ServerStatusRow, $"RC Status: {s.ServerStatus}".PadRight(width));
+        WriteAt(ConnectionRow, connLine.PadRight(width));
 
         var car = s.Car;
         if (car is null)

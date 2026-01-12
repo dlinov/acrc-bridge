@@ -17,6 +17,7 @@ public sealed class ACUdpReader(
 {
     private readonly IPEndPoint _acEndPoint = new(IPAddress.Parse(acHost), acPort);
 
+    // may be used for debugging purposes
     public static int ExpectedHandshakeResponseSize => Marshal.SizeOf<HandshakeResponse>();
     public static int ExpectedRTCarInfoSize => Marshal.SizeOf<RTCarInfo>();
     public static int ExpectedRTLapSize => Marshal.SizeOf<RTLap>();
@@ -69,6 +70,7 @@ public sealed class ACUdpReader(
                         trackName = response.TrackName;
 
                         Connected?.Invoke(new ConnectionInfo(
+                            IsConnected: true,
                             DriverName: response.DriverName,
                             CarName: response.CarName,
                             TrackName: response.TrackName,
@@ -108,6 +110,7 @@ public sealed class ACUdpReader(
                     {
                         // No data received for a while -> treat it as race stopped
                         Status?.Invoke($"No data for {idleTimeout.TotalSeconds:0}s. Reconnecting...");
+                        Connected?.Invoke(ConnectionInfo.Disconnected);
                         break;
                     }
 

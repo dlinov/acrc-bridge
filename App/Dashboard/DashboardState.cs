@@ -4,7 +4,7 @@ namespace ACRCBridge.App.Dashboard;
 
 internal sealed class DashboardState
 {
-    private readonly object _lockObj = new();
+    private readonly Lock _lock = new();
 
     private string _status = "";
     private string _serverStatus = "";
@@ -12,55 +12,47 @@ internal sealed class DashboardState
     private CarUpdate? _car;
     private LapEvent? _lap;
 
-    public DashboardState(int ExpectedHandshakeResponseSize, int ExpectedRTCarInfoSize, int ExpectedRTLapSize)
-    {
-        this.ExpectedHandshakeResponseSize = ExpectedHandshakeResponseSize;
-        this.ExpectedRTCarInfoSize = ExpectedRTCarInfoSize;
-        this.ExpectedRTLapSize = ExpectedRTLapSize;
-    }
-
-    public int ExpectedHandshakeResponseSize { get; }
-    public int ExpectedRTCarInfoSize { get; }
-    public int ExpectedRTLapSize { get; }
-
     public void SetStatus(string status)
     {
-        lock (_lockObj) _status = status;
+        lock (_lock) _status = status;
     }
 
     public void SetServerStatus(string serverStatus)
     {
-        lock (_lockObj) _serverStatus = serverStatus;
+        lock (_lock) _serverStatus = serverStatus;
     }
 
-    public void SetConnection(ConnectionInfo info)
+    public void SetConnection(ConnectionInfo connectionInfo)
     {
-        lock (_lockObj) _connection = info;
+        lock (_lock)
+        {
+            _connection = connectionInfo;
+            if (connectionInfo.IsConnected) return;
+            _car = null;
+            _lap = null;
+        }
     }
 
     public void SetCar(CarUpdate update)
     {
-        lock (_lockObj) _car = update;
+        lock (_lock) _car = update;
     }
 
     public void SetLap(LapEvent lap)
     {
-        lock (_lockObj) _lap = lap;
+        lock (_lock) _lap = lap;
     }
 
     public DashboardSnapshot Snapshot()
     {
-        lock (_lockObj)
+        lock (_lock)
         {
             return new DashboardSnapshot(
                 Status: _status,
                 ServerStatus: _serverStatus,
                 Connection: _connection,
                 Car: _car,
-                Lap: _lap,
-                ExpectedHandshakeResponseSize: ExpectedHandshakeResponseSize,
-                ExpectedRTCarInfoSize: ExpectedRTCarInfoSize,
-                ExpectedRTLapSize: ExpectedRTLapSize);
+                Lap: _lap);
         }
     }
 }

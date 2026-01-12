@@ -7,7 +7,6 @@ using Microsoft.Extensions.Configuration;
 
 // TODO: Add command-line arguments for:
 // - choice of data collection method (memory-mapped file vs. UDP)
-// - configuration (e.g., publication port, timeouts, etc.)
 // - writing collected data to a file (TODO: how to replay this correctly?)
 
 Console.WriteLine("Starting Assetto Corsa - RaceChrono bridge. Press Ctrl+C to stop at any time...");
@@ -31,11 +30,7 @@ var acConfig = gamesConfig.AssettoCorsa;
 var trackDtos = trackConfigs.Select(kv => (kv.Key, kv.Value.AsDto)).ToDictionary();
 var convertersCollection = new GeoConvertersCollection(trackDtos);
 
-var state = new DashboardState(
-    ExpectedHandshakeResponseSize: ACUdpReader.ExpectedHandshakeResponseSize,
-    ExpectedRTCarInfoSize: ACUdpReader.ExpectedRTCarInfoSize,
-    ExpectedRTLapSize: ACUdpReader.ExpectedRTLapSize);
-
+var state = new DashboardState();
 var acTelemetryListener = new ACUdpReader(
     acConfig.Host,
     acConfig.Port,
