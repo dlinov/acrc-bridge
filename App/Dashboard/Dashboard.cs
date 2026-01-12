@@ -2,20 +2,20 @@
 
 internal static class Dashboard
 {
-    const int TitleRow = 0;
-    const int StatusRow = 1;
-    const int ConnectionRow = 2;
-    const int ServerStatusRow = 3;
-    const int ExpectedSizesRow = 4;
-    const int SpeedRow = 5;
-    const int RpmGearRow = 6;
-    const int PositionRow = 7;
-    const int GasRow = 8;
-    const int BrakeRow = 9;
-    const int ClutchRow = 10;
-    const int LapRow2 = 11;
-    const int LapRow = 12;
-    const int DashboardRowCount = LapRow + 1;
+    private const int TitleRow = 0;
+    private const int StatusRow = 1;
+    private const int ConnectionRow = 2;
+    private const int ServerStatusRow = 3;
+    private const int ExpectedSizesRow = 4;
+    private const int SpeedRow = 5;
+    private const int RpmGearRow = 6;
+    private const int PositionRow = 7;
+    private const int GasRow = 8;
+    private const int BrakeRow = 9;
+    private const int ClutchRow = 10;
+    private const int LapRow2 = 11;
+    private const int LapRow = 12;
+    private const int DashboardRowCount = LapRow + 1;
 
     public static async Task RunDashboardAsync(DashboardState state, CancellationToken token)
     {
@@ -43,7 +43,6 @@ internal static class Dashboard
             Render(snapshot);
         }
 
-
         if (OperatingSystem.IsWindows())
         {
             Console.CursorVisible = oldCursorVisible;
@@ -52,7 +51,7 @@ internal static class Dashboard
         Console.Clear();
     }
 
-    static void Render(DashboardSnapshot s)
+    private static void Render(DashboardSnapshot s)
     {
         var width = Math.Max(40, Console.WindowWidth);
 
@@ -125,7 +124,7 @@ internal static class Dashboard
         }
     }
 
-    static string FormatLapTimeMs(int milliseconds)
+    private static string FormatLapTimeMs(int milliseconds)
     {
         if (milliseconds <= 0)
         {
@@ -137,14 +136,14 @@ internal static class Dashboard
         return $"{minutes:00}:{ts.Seconds:00}.{ts.Milliseconds:000}";
     }
 
-    static string ProgressBar(float progress01, int width)
+    private static string ProgressBar(float progress01, int width)
     {
         progress01 = Math.Clamp(progress01, 0f, 1f);
         var filled = (int)Math.Round(progress01 * width);
         return "[" + new string('#', filled) + new string('-', Math.Max(0, width - filled)) + "]";
     }
 
-    static void WriteAt(int row, string text)
+    private static void WriteAt(int row, string text)
     {
         // Avoid exceptions when console is resized too small.
         if (row < 0) return;
