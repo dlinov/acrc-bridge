@@ -19,13 +19,12 @@ internal static class Dashboard
 
     public static async Task RunDashboardAsync(DashboardState state, CancellationToken token)
     {
-        if (!OperatingSystem.IsWindows())
+        var oldCursorVisible = true;
+        if (OperatingSystem.IsWindows())
         {
-            return;
+            oldCursorVisible = Console.CursorVisible;
+            Console.CursorVisible = false;
         }
-
-        var oldCursorVisible = Console.CursorVisible;
-        Console.CursorVisible = false;
 
         // Clear whole screen (cls) once before drawing the fixed dashboard area.
         // Doing this every frame would flicker.
@@ -44,7 +43,12 @@ internal static class Dashboard
             Render(snapshot);
         }
 
-        Console.CursorVisible = oldCursorVisible;
+
+        if (OperatingSystem.IsWindows())
+        {
+            Console.CursorVisible = oldCursorVisible;
+        }
+
         Console.Clear();
     }
 
