@@ -19,6 +19,12 @@ internal static class Dashboard
 
     public static async Task RunDashboardAsync(DashboardState state, CancellationToken token)
     {
+        if (Console.IsOutputRedirected)
+        {
+            // Don't run dashboard if output is redirected (e.g., to a file).
+            return;
+        }
+
         var oldCursorVisible = true;
         if (OperatingSystem.IsWindows())
         {
