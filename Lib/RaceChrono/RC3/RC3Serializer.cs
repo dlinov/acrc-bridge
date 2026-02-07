@@ -46,9 +46,9 @@ public class RC3Serializer(CultureInfo culture)
         var a2 = data.Gas;
         var a3 = data.Brake;
         var a4 = data.Clutch;
-        var a5 = data.PosX;
-        var a6 = data.PosY;
-        var a7 = data.PosZ;
+        var a5 = data.Longitude;
+        var a6 = data.Altitude;
+        var a7 = data.Latitude;
         var a8 = data.PosNormalized;
         var a9 = data.Slope;
         var a10 = (float)data.LapTime;
