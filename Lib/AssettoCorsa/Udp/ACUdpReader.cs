@@ -95,6 +95,20 @@ public sealed class ACUdpReader(
                 if (!connected || token.IsCancellationRequested)
                     continue;
 
+                GeoConverter coordinatesConverter;
+                try
+                {
+                    coordinatesConverter = coordinateConverters.GetConverter(trackName);
+                }
+                catch (NotSupportedException ex)
+                {
+                    // We connected to AC, read the track name, but can't convert coordinates for the track.
+                    // Exit the loop so StartAsync completes and the app can terminate.
+                    Status?.Invoke($"FATAL: {ex.Message}\nPlease add track reference points to config");
+                    Error?.Invoke(ex);
+                    return;
+                }
+
                 // 3. Subscribe to updates
                 Status?.Invoke("Subscribing to updates...");
                 await SendSubscribeUpdateAsync(udpClient, _acEndPoint).ConfigureAwait(false);
@@ -117,10 +131,9 @@ public sealed class ACUdpReader(
                     }
 
                     var result = await receiveTask.ConfigureAwait(false);
-                    if (result.Buffer.Length == Marshal.SizeOf<RTCarInfo>())
+                    if (result.Buffer.Length == ExpectedRTCarInfoSize)
                     {
                         var info = Deserialize<RTCarInfo>(result.Buffer);
-                        var coordinatesConverter = coordinateConverters.GetConverter(trackName);
                         var gameCarX = info.CarCoordinatesX;
                         var gameCarY = info.CarCoordinatesY;
                         var gameCarZ = info.CarCoordinatesZ;
@@ -148,7 +161,7 @@ public sealed class ACUdpReader(
                             AccGHorizontal: info.AccGHorizontal,
                             AccGFrontal: info.AccGFrontal));
                     }
-                    else if (result.Buffer.Length == Marshal.SizeOf<RTLap>())
+                    else if (result.Buffer.Length == ExpectedRTLapSize)
                     {
                         var lap = Deserialize<RTLap>(result.Buffer);
                         LapEvent?.Invoke(new LapEvent(
