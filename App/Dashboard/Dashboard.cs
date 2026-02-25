@@ -90,9 +90,12 @@ internal static class Dashboard
             var carValue = car.Value;
             var speed = Math.Clamp(carValue.SpeedKmh, 0, 320);
             var bar = ProgressBar(speed / 320f, Math.Clamp(width - 25, 10, 60));
-            var posX = carValue.PosX;
-            var posY = carValue.PosY;
-            var posZ = carValue.PosZ;
+            var posX = carValue.GamePosX;
+            var posY = carValue.GamePosY;
+            var posZ = carValue.GamePosZ;
+            var longitude = carValue.Longitude;
+            var latitude = carValue.Latitude;
+            var altitude = carValue.Altitude;
             var posNorm = carValue.PosNormalized;
             var slope = carValue.Slope;
             var lapCount = carValue.LapCount;
@@ -105,7 +108,7 @@ internal static class Dashboard
             WriteAt(SpeedRow, $"Speed: {carValue.SpeedKmh,6:F1} km/h {bar}".PadRight(width));
             WriteAt(RpmGearRow, $"RPM: {carValue.EngineRpm,6:F0}  Gear: {carValue.Gear,2}".PadRight(width));
             WriteAt(PositionRow,
-                $"Position: X={posX} Y={posY} Z={posZ} | Normalized position: {posNorm} | Slope: {slope}"
+                $"Position: X={posX:F6} Y={posY:F6} Z={posZ:F6} Norm={posNorm:F6} | Longitude: {longitude:F6} | Latitude: {latitude:F6} | H: {altitude} | Slope: {slope}"
                     .PadRight(width));
             WriteAt(LapRow2,
                 $"Current lap: {currLap} | Best lap: {bestLap} | Previous lap: {prevLap} | Lap count: {lapCount}"

@@ -50,8 +50,8 @@ public sealed class LearnTrackWizard
             Console.WriteLine("Telemetry lost. Exiting.");
             return EmptyResponse;
         }
-        var p0AcX = carUpdate0.Value.PosX;
-        var p0AcZ = carUpdate0.Value.PosZ;
+        var p0AcX = carUpdate0.Value.GamePosX;
+        var p0AcZ = carUpdate0.Value.GamePosZ;
         var p0Lat = PromptDouble("  GPS Latitude: ");
         var p0Lon = PromptDouble("  GPS Longitude: ");
         Console.WriteLine("Point0 recorded: AC: X={0}, Z={1}; GPS: {2}, {3}", p0AcX, p0AcZ, p0Lat, p0Lon);
@@ -63,8 +63,8 @@ public sealed class LearnTrackWizard
             return EmptyResponse;
         }
         Console.WriteLine("Drive the car to Point1 and provide its GPS coordinates when arrived:");
-        var p1AcX = carUpdate1.Value.PosX;
-        var p1AcZ = carUpdate1.Value.PosZ;
+        var p1AcX = carUpdate1.Value.GamePosX;
+        var p1AcZ = carUpdate1.Value.GamePosZ;
         var p1Lat = PromptDouble("  GPS Latitude: ");
         var p1Lon = PromptDouble("  GPS Longitude: ");
         Console.WriteLine("Point1 recorded: AC: X={0}, Z={1}; GPS: {2}, {3}", p1AcX, p1AcZ, p1Lat, p1Lon);

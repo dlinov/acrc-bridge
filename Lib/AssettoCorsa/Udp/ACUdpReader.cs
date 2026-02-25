@@ -121,11 +121,10 @@ public sealed class ACUdpReader(
                     {
                         var info = Deserialize<RTCarInfo>(result.Buffer);
                         var coordinatesConverter = coordinateConverters.GetConverter(trackName);
-                        var gps = coordinatesConverter.FromGameCoordinates(
-                            info.CarCoordinatesX,
-                            info.CarCoordinatesZ);
-                        info.CarCoordinatesX = (float)gps.Latitude;
-                        info.CarCoordinatesZ = (float)gps.Longitude;
+                        var gameCarX = info.CarCoordinatesX;
+                        var gameCarY = info.CarCoordinatesY;
+                        var gameCarZ = info.CarCoordinatesZ;
+                        var gps = coordinatesConverter.FromGameCoordinates(gameCarX, gameCarZ);
                         CarUpdate?.Invoke(new CarUpdate(
                             SpeedKmh: info.SpeedKmh,
                             EngineRpm: info.EngineRPM,
@@ -137,9 +136,12 @@ public sealed class ACUdpReader(
                             Gas: info.Gas,
                             Brake: info.Brake,
                             Clutch: invertClutch ? 1 - info.Clutch : info.Clutch,
-                            PosX: info.CarCoordinatesX,
-                            PosY: info.CarCoordinatesY,
-                            PosZ: info.CarCoordinatesZ,
+                            Longitude: (float)gps.Latitude,
+                            Altitude: 0, // TODO: check if it can be calculated from game coordinates
+                            Latitude: (float)gps.Longitude,
+                            GamePosX: gameCarX,
+                            GamePosY: gameCarY,
+                            GamePosZ: gameCarZ,
                             Slope: info.CarSlope,
                             PosNormalized: info.CarPositionNormalized,
                             AccGVertical: info.AccGVertical,

@@ -111,13 +111,12 @@ public sealed class RaceChronoPublisher : ITelemetryPublisher
         // Send both sentence types over the same TCP stream.
         var nowUtc = DateTime.UtcNow;
 
-        // GPS: use update.PosX/PosZ as lat/lon (ACUdpReader already converts them).
-        var lat = (double)update.PosX;
-        var lon = (double)update.PosZ;
+        var lat = (double)update.Longitude;
+        var lon = (double)update.Latitude;
+        var altitude = (double)update.Altitude;
 
         var rmc = _gprmcSerializer.Serialize(nowUtc, lat, lon, speedKmh: update.SpeedKmh, courseDeg: 0);
-        // TODO: altitudeMeters can be derived from PosY if needed.
-        var gga = _gpggaSerializer.Serialize(nowUtc, lat, lon, altitudeMeters: 0, fixQuality: 1, satellites: 8, hdop: 1.0);
+        var gga = _gpggaSerializer.Serialize(nowUtc, lat, lon, altitudeMeters: altitude, fixQuality: 1, satellites: 8, hdop: 1.0);
         var rc3 = _rc3Serializer.Serialize(update, nowUtc, mixedWithNmea: true);
 
         // Fire-and-forget: don't block the telemetry listener thread.
