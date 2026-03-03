@@ -4,24 +4,29 @@ namespace ACRCBridge.Lib.Coordinates;
 
 public sealed class GeoConverter
 {
+    private const double EarthRadiusMeters = 6378137.0; // WGS84 equatorial radius
     private readonly float _originAcX;
+    private readonly float _originAcY;
     private readonly float _originAcZ;
 
     private readonly GpsCoordinate _originGps;
     private readonly double _earthRadius;
     private readonly double _lonRadius;
 
-    private readonly double _scale;
+    private readonly double _hScale;
+    private readonly double _vScale;
     private readonly double _cosRot;
     private readonly double _sinRot;
 
-    private GeoConverter(ReferencePoint originPoint, double scale, double rotRad, double earthRadius)
+    private GeoConverter(ReferencePoint originPoint, double hScale, double vScale, double rotRad, double earthRadius)
     {
         _originAcX = originPoint.X;
+        _originAcY = originPoint.Y;
         _originAcZ = originPoint.Z;
 
         _originGps = originPoint.GpsCoordinate;
-        _scale = scale;
+        _hScale = hScale;
+        _vScale = vScale;
         _earthRadius = earthRadius;
 
         _lonRadius = _earthRadius * Math.Cos(_originGps.Latitude * Math.PI / 180.0);
@@ -40,7 +45,7 @@ public sealed class GeoConverter
     internal static GeoConverter FromTwoReferencePoints(
         ReferencePoint point0,
         ReferencePoint point1,
-        double earthRadiusMeters = 6378137.0)
+        double earthRadiusMeters = EarthRadiusMeters)
     {
         // AC delta vector
         double dax = point1.X - point0.X;
@@ -65,7 +70,7 @@ public sealed class GeoConverter
             throw new ArgumentException("GPS reference points are identical/too close; can't derive scale/rotation.");
         }
 
-        var scale = gLen / aLen;
+        var hScale = gLen / aLen;
 
         // Axis convention:
         // - ENU uses +East, +North.
@@ -81,13 +86,18 @@ public sealed class GeoConverter
         var angleGps = Math.Atan2(north, east);
         var rotRad = angleGps - angleAc;
 
-        return new GeoConverter(point0, scale, rotRad, earthRadiusMeters);
+        var dAcY = point1.Y - point0.Y;
+        var dGpsHeight = point1.GpsCoordinate.Height - point0.GpsCoordinate.Height;
+        var vScale = Math.Abs(dAcY) > 1e-6 ? dGpsHeight / dAcY : 0.0;
+
+        return new GeoConverter(point0, hScale, vScale, rotRad, earthRadiusMeters);
     }
 
-    public GpsCoordinate FromGameCoordinates(float acX, float acZ)
+    public GpsCoordinate FromGameCoordinates(float acX, float acY, float acZ)
     {
         // Always use the AC reference origin from the calibration pair.
         double x = acX - _originAcX;
+        double y = acY - _originAcY;
         double z = acZ - _originAcZ;
 
         // Apply the same axis convention as calibration: (eastAc = x, northAc = -z)
@@ -98,8 +108,8 @@ public sealed class GeoConverter
         var eastRot = eastAc * _cosRot - northAc * _sinRot;
         var northRot = eastAc * _sinRot + northAc * _cosRot;
 
-        var east = _scale * eastRot;
-        var north = _scale * northRot;
+        var east = _hScale * eastRot;
+        var north = _hScale * northRot;
 
         // Convert meters to lat/lon degrees around GPS origin.
         var dLat = north / _earthRadius;
@@ -107,18 +117,19 @@ public sealed class GeoConverter
 
         var lat = _originGps.Latitude + dLat * 180.0 / Math.PI;
         var lon = _originGps.Longitude + dLon * 180.0 / Math.PI;
+        var height = _originGps.Height + _vScale * y;
 
-        return new GpsCoordinate(lat, lon);
+        return new GpsCoordinate(lat, lon, height);
     }
 
     // Porsche Ring track converter. Choice of reference points is arbitrary but should cover a reasonable distance.
     internal static readonly GeoConverter PorscheRing = FromTwoReferencePoints(
-        point0: new ReferencePoint(0.0f, 0.0f, new GpsCoordinate(58.401111, 24.453306)), // AC track origin
-        point1: new ReferencePoint(-299.5362f, -132.2299f, new GpsCoordinate(58.402361, 24.448056)) // AC start line
+        point0: new ReferencePoint(0.0f, 0.0f, 0.0f, new GpsCoordinate(58.401111, 24.453306, 4)), // AC track origin
+        point1: new ReferencePoint(-299.5362f, -132.2299f, 0.0f, new GpsCoordinate(58.402361, 24.448056, 5)) // AC start line
     );
 
     internal static readonly GeoConverter Spa = FromTwoReferencePoints(
-        point0: new ReferencePoint(0.0f, 0.0f, new GpsCoordinate(50.437591, 5.969755)), // AC track origin
-        point1: new ReferencePoint(598.888700f, 825.427600f, new GpsCoordinate(50.429761, 5.977091)) // End of Kemmel plus two turns, end of curb/water sink
+        point0: new ReferencePoint(0.0f, 0.0f, 0.0f, new GpsCoordinate(50.437591, 5.969755, 381)), // AC track origin
+        point1: new ReferencePoint(598.888700f, 825.427600f, 0.0f, new GpsCoordinate(50.429761, 5.977091, 469)) // End of Kemmel plus two turns, end of curb/water sink
     );
 }

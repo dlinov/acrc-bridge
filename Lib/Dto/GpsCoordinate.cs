@@ -1,3 +1,3 @@
 ﻿namespace ACRCBridge.Lib.Dto;
 
-public record GpsCoordinate(double Latitude, double Longitude);
+public record GpsCoordinate(double Latitude, double Longitude, double Height);
