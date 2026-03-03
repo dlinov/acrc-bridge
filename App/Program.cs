@@ -34,7 +34,11 @@ var config = new ConfigurationBuilder()
     .SetBasePath(AppContext.BaseDirectory)
     .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
     .Build();
-var (gamesConfig, bridgePort, trackConfigs) = AppConfig.Load(config);
+var appConfig = AppConfig.Load(config);
+var gamesConfig = appConfig.Games;
+var bridgePort = appConfig.Bridge.Port;
+var trackConfigs = appConfig.Tracks;
+var bridgeBindAddress = appConfig.Bridge.BindAddress;
 var acConfig = gamesConfig.AssettoCorsa;
 var trackDtos = trackConfigs.Select(kv => (kv.Key, kv.Value.AsDto)).ToDictionary();
 var convertersCollection = new GeoConvertersCollection(trackDtos);
@@ -47,10 +51,8 @@ var acTelemetryListener = new ACUdpReader(
     handshakeRetryTimeout: acConfig.HandshakeRetryTimeout,
     idleTimeout: acConfig.IdleTimeout,
     coordinateConverters: convertersCollection);
-var rcTelemetryPublisher = new RaceChronoPublisher(bridgePort, acTelemetryListener);
+var rcTelemetryPublisher = new RaceChronoPublisher(bridgePort, acTelemetryListener, bridgeBindAddress);
 
-var readerTask = acTelemetryListener.StartAsync(cts.Token);
-var pubTask = rcTelemetryPublisher.StartAsync(cts.Token);
 #pragma warning disable CS8524 // The switch expression does not handle some values of its input type (it is not exhaustive) involving an unnamed enum value.
 var uiTask = appMode switch
 #pragma warning restore CS8524 // The switch expression does not handle some values of its input type (it is not exhaustive) involving an unnamed enum value.
@@ -60,6 +62,8 @@ var uiTask = appMode switch
     AppMode.LearnTrack =>
         RunLearnTrackAsync(acTelemetryListener),
 };
+var readerTask = acTelemetryListener.StartAsync(cts.Token);
+var pubTask = rcTelemetryPublisher.StartAsync(cts.Token);
 
 try
 {
