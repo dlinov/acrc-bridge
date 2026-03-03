@@ -36,7 +36,7 @@ public sealed class LearnTrackWizard
         Console.WriteLine("Track learning mode (--learn-track)");
         Console.WriteLine("You'll enter 2 reference points. For each point you need to:");
         Console.WriteLine("- drive your car to a known location on the track in the game");
-        Console.WriteLine("- provide GPS latitude and longitude of the location");
+        Console.WriteLine("- provide GPS latitude, longitude and height of the location");
         Console.WriteLine("After entering both points, you'll get a JSON snippet to add to appsettings.json.");
         Console.WriteLine("Awaiting for game telemetry...");
         await AwaitGameTelemetryAsync(token);
@@ -51,10 +51,12 @@ public sealed class LearnTrackWizard
             return EmptyResponse;
         }
         var p0AcX = carUpdate0.Value.GamePosX;
+        var p0AcY = carUpdate0.Value.GamePosY;
         var p0AcZ = carUpdate0.Value.GamePosZ;
         var p0Lat = PromptDouble("  GPS Latitude: ");
         var p0Lon = PromptDouble("  GPS Longitude: ");
-        Console.WriteLine("Point0 recorded: AC: X={0}, Z={1}; GPS: {2}, {3}", p0AcX, p0AcZ, p0Lat, p0Lon);
+        var p0Height = PromptDouble("  GPS Height (meters): ");
+        Console.WriteLine("Point0 recorded: AC: X={0}, Y={1}, Z={2}; GPS: {3}, {4}, {5}m", p0AcX, p0AcY, p0AcZ, p0Lat, p0Lon, p0Height);
 
         var carUpdate1 = _carUpdate;
         if (carUpdate1 is null)
@@ -64,17 +66,19 @@ public sealed class LearnTrackWizard
         }
         Console.WriteLine("Drive the car to Point1 and provide its GPS coordinates when arrived:");
         var p1AcX = carUpdate1.Value.GamePosX;
+        var p1AcY = carUpdate1.Value.GamePosY;
         var p1AcZ = carUpdate1.Value.GamePosZ;
         var p1Lat = PromptDouble("  GPS Latitude: ");
         var p1Lon = PromptDouble("  GPS Longitude: ");
-        Console.WriteLine("Point1 recorded: AC: X={0}, Z={1}; GPS: {2}, {3}", p1AcX, p1AcZ, p1Lat, p1Lon);
+        var p1Height = PromptDouble("  GPS Height (meters): ");
+        Console.WriteLine("Point1 recorded: AC: X={0}, Y={1}, Z={2}; GPS: {3}, {4}, {5}m", p1AcX, p1AcY, p1AcZ, p1Lat, p1Lon, p1Height);
 
         // Build the exact DTO shape used in config: Dictionary<string, TrackReferencePoints>
         var singleTrackDictionary = new Dictionary<string, TrackReferencePoints>
         {
             [trackName] = new(
-                Point0: new ReferencePoint(p0AcX, p0AcZ, new GpsCoordinate(p0Lat, p0Lon)),
-                Point1: new ReferencePoint(p1AcX, p1AcZ, new GpsCoordinate(p1Lat, p1Lon)))
+                Point0: new ReferencePoint(p0AcX, p0AcY, p0AcZ, new GpsCoordinate(p0Lat, p0Lon, p0Height)),
+                Point1: new ReferencePoint(p1AcX, p1AcY, p1AcZ, new GpsCoordinate(p1Lat, p1Lon, p1Height)))
         };
         var json = JsonSerializer.Serialize(singleTrackDictionary, _jsonSerializerOptions);
 

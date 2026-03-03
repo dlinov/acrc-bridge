@@ -137,7 +137,7 @@ public sealed class ACUdpReader(
                         var gameCarX = info.CarCoordinatesX;
                         var gameCarY = info.CarCoordinatesY;
                         var gameCarZ = info.CarCoordinatesZ;
-                        var gps = coordinatesConverter.FromGameCoordinates(gameCarX, gameCarZ);
+                        var gps = coordinatesConverter.FromGameCoordinates(gameCarX, gameCarY, gameCarZ);
                         CarUpdate?.Invoke(new CarUpdate(
                             SpeedKmh: info.SpeedKmh,
                             EngineRpm: info.EngineRPM,
@@ -150,7 +150,7 @@ public sealed class ACUdpReader(
                             Brake: info.Brake,
                             Clutch: invertClutch ? 1 - info.Clutch : info.Clutch,
                             Longitude: (float)gps.Latitude,
-                            Altitude: 0, // TODO: check if it can be calculated from game coordinates
+                            Altitude: (float)gps.Height,
                             Latitude: (float)gps.Longitude,
                             GamePosX: gameCarX,
                             GamePosY: gameCarY,

@@ -4,6 +4,7 @@ namespace ACRCBridge.Lib.Coordinates;
 
 public sealed class GeoConverter
 {
+    private const double EarthRadiusMeters = 6378137.0; // WGS84 equatorial radius
     private readonly float _originAcX;
     private readonly float _originAcZ;
 
@@ -11,17 +12,36 @@ public sealed class GeoConverter
     private readonly double _earthRadius;
     private readonly double _lonRadius;
 
-    private readonly double _scale;
+    private readonly double _hScale;
+    private readonly double _heightScale;
+    private readonly double _heightOffset;
     private readonly double _cosRot;
     private readonly double _sinRot;
 
-    private GeoConverter(ReferencePoint originPoint, double scale, double rotRad, double earthRadius)
+    /// <summary>
+    /// Creates a GeoConverter using two reference points.
+    /// </summary>
+    /// <param name="originPoint"></param>
+    /// <param name="hScale">Coefficient to recalculate X and Z game coordinates</param>
+    /// <param name="heightScale">Assuming H = aY + b, this is a</param>
+    /// <param name="heightOffset">Assuming H = aY + b, this is b</param>
+    /// <param name="rotRad"></param>
+    /// <param name="earthRadius">Earth radius in meters. If not specified, taking equatorial radius</param>
+    private GeoConverter(
+        ReferencePoint originPoint,
+        double hScale,
+        double heightScale,
+        double heightOffset,
+        double rotRad,
+        double earthRadius)
     {
         _originAcX = originPoint.X;
         _originAcZ = originPoint.Z;
 
         _originGps = originPoint.GpsCoordinate;
-        _scale = scale;
+        _hScale = hScale;
+        _heightScale = heightScale;
+        _heightOffset = heightOffset;
         _earthRadius = earthRadius;
 
         _lonRadius = _earthRadius * Math.Cos(_originGps.Latitude * Math.PI / 180.0);
@@ -31,24 +51,35 @@ public sealed class GeoConverter
     }
 
     /// <summary>
-    /// Creates a converter from two reference pairs mapping AC (X,Z) coordinates to GPS coordinates.
+    /// Creates a converter from two reference pairs mapping AC (X,Y,Z) coordinates to GPS coordinates.
     /// Assumptions/contract:
     /// - AC points are in meters in an X/Z plane.
+    /// - AC point contains Y coordinate which is height.
     /// - GPS points are close enough to use a local tangent-plane (ENU) approximation.
     /// - The transform is: ENU = scale * R(theta) * (ac - ac0), then added to gps0.
+    /// - Height is calculated as: H = aY + b, where Y is AC height and a,b are calculated from the reference points.
     /// </summary>
     internal static GeoConverter FromTwoReferencePoints(
         ReferencePoint point0,
         ReferencePoint point1,
-        double earthRadiusMeters = 6378137.0)
+        double earthRadiusMeters = EarthRadiusMeters)
     {
         // AC delta vector
         double dax = point1.X - point0.X;
         double daz = point1.Z - point0.Z;
         var aLen = Math.Sqrt(dax * dax + daz * daz);
-        if (aLen < 1e-6)
+        const double minDelta = 1e-6;
+        if (aLen < minDelta)
         {
-            throw new ArgumentException("AC reference points are identical/too close; can't derive scale/rotation.");
+            throw new ArgumentException("AC ref. points are identical/too close; can't derive scale/rotation.");
+        }
+        if (Math.Abs(point1.Y - point0.Y) < minDelta)
+        {
+            throw new ArgumentException("AC ref. points have identical/too close Y; can't derive height mapping.");
+        }
+        if (Math.Abs(point1.GpsCoordinate.Height - point0.GpsCoordinate.Height) < minDelta)
+        {
+            throw new ArgumentException("AC ref. points have identical/too close GPS height; can't derive height mapping.");
         }
 
         // GPS delta vector in local ENU meters around gps0
@@ -60,12 +91,12 @@ public sealed class GeoConverter
         var north = dLatRad * earthRadiusMeters;
 
         var gLen = Math.Sqrt(east * east + north * north);
-        if (gLen < 1e-6)
+        if (gLen < minDelta)
         {
             throw new ArgumentException("GPS reference points are identical/too close; can't derive scale/rotation.");
         }
 
-        var scale = gLen / aLen;
+        var hScale = gLen / aLen;
 
         // Axis convention:
         // - ENU uses +East, +North.
@@ -73,18 +104,25 @@ public sealed class GeoConverter
         // So we map AC (X,Z) to an intermediate (E,S) plane with S = +Z.
         // Then convert to ENU by rotating (E,S) onto (East,North) and flipping the S/N sign.
         // Practically: treat the AC vector as (eastAc = dax, northAc = -daz).
-        double eastAc = dax;
-        double northAc = -daz;
+        var eastAc = dax;
+        var northAc = -daz;
 
         // Find rotation so that R(theta) * (eastAc,northAc) aligns with (east,north).
         var angleAc = Math.Atan2(northAc, eastAc);
         var angleGps = Math.Atan2(north, east);
         var rotRad = angleGps - angleAc;
 
-        return new GeoConverter(point0, scale, rotRad, earthRadiusMeters);
+        var height0 = point0.GpsCoordinate.Height;
+        var height1 = point1.GpsCoordinate.Height;
+        var y0 = point0.Y;
+        var y1 = point1.Y;
+        var heightScale = (height0 - height1) / (y0 - y1);
+        var heightOffset = (height1 * y0 - height0 * y1) / (y0 - y1);
+
+        return new GeoConverter(point0, hScale, heightScale, heightOffset, rotRad, earthRadiusMeters);
     }
 
-    public GpsCoordinate FromGameCoordinates(float acX, float acZ)
+    public GpsCoordinate FromGameCoordinates(float acX, float acY, float acZ)
     {
         // Always use the AC reference origin from the calibration pair.
         double x = acX - _originAcX;
@@ -98,8 +136,8 @@ public sealed class GeoConverter
         var eastRot = eastAc * _cosRot - northAc * _sinRot;
         var northRot = eastAc * _sinRot + northAc * _cosRot;
 
-        var east = _scale * eastRot;
-        var north = _scale * northRot;
+        var east = _hScale * eastRot;
+        var north = _hScale * northRot;
 
         // Convert meters to lat/lon degrees around GPS origin.
         var dLat = north / _earthRadius;
@@ -107,18 +145,8 @@ public sealed class GeoConverter
 
         var lat = _originGps.Latitude + dLat * 180.0 / Math.PI;
         var lon = _originGps.Longitude + dLon * 180.0 / Math.PI;
+        var height = _heightScale * acY + _heightOffset;
 
-        return new GpsCoordinate(lat, lon);
+        return new GpsCoordinate(lat, lon, height);
     }
-
-    // Porsche Ring track converter. Choice of reference points is arbitrary but should cover a reasonable distance.
-    internal static readonly GeoConverter PorscheRing = FromTwoReferencePoints(
-        point0: new ReferencePoint(0.0f, 0.0f, new GpsCoordinate(58.401111, 24.453306)), // AC track origin
-        point1: new ReferencePoint(-299.5362f, -132.2299f, new GpsCoordinate(58.402361, 24.448056)) // AC start line
-    );
-
-    internal static readonly GeoConverter Spa = FromTwoReferencePoints(
-        point0: new ReferencePoint(0.0f, 0.0f, new GpsCoordinate(50.437591, 5.969755)), // AC track origin
-        point1: new ReferencePoint(598.888700f, 825.427600f, new GpsCoordinate(50.429761, 5.977091)) // End of Kemmel plus two turns, end of curb/water sink
-    );
 }

@@ -1,3 +1,3 @@
 ﻿namespace ACRCBridge.Lib.Dto;
 
-public record ReferencePoint(float X, float Z, GpsCoordinate GpsCoordinate);
+public record ReferencePoint(float X, float Y, float Z, GpsCoordinate GpsCoordinate);
