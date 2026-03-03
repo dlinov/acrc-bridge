@@ -13,6 +13,7 @@ Idea is simple: read data from AC, find track GPS coordinates, map it to in-game
 - [AC Socket Document](https://docs.google.com/document/d/1KfkZiIluXZ6mMhLWfDX1qAGbvhGRC3ZUzjVIt5FQpp4/pub)
 - [AC forum thread "AC UDP Remote Telemetry"](https://www.assettocorsa.net/forum/index.php?threads/ac-udp-remote-telemetry-update-31-03-2016.222/)
 - [Assetto Corsa Remote Telemetry Client](https://github.com/rickwest/ac-remote-telemetry-client) by [@rickwest](https://github.com/rickwest)
+- [Topograhic maps (useful to find height of a location)](https://topographic-map.com/)
 
 ### TODO
 - Wiki/Instruction how to use with screenshots
