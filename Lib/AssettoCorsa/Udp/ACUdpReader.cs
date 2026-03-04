@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
@@ -250,7 +251,11 @@ public sealed class ACUdpReader(
         return buffer;
     }
 
-    private static T Deserialize<T>(byte[] data) where T : struct
+    private static T Deserialize<
+        [DynamicallyAccessedMembers(
+            DynamicallyAccessedMemberTypes.PublicConstructors |
+            DynamicallyAccessedMemberTypes.NonPublicConstructors)]
+        T>(byte[] data) where T : struct
     {
         var handle = GCHandle.Alloc(data, GCHandleType.Pinned);
         try
