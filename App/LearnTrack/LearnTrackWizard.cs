@@ -10,7 +10,6 @@ public sealed class LearnTrackWizard
     private const string EmptyResponse = "{}";
     private readonly ITelemetryListener _telemetryListener;
     private readonly TimeSpan _connectionTimeout;
-    private readonly JsonSerializerOptions _jsonSerializerOptions;
     private ConnectionInfo? _connectionInfo;
     private CarUpdate? _carUpdate;
 
@@ -20,10 +19,6 @@ public sealed class LearnTrackWizard
     {
         _telemetryListener = telemetryListener;
         _connectionTimeout = connectionTimeout;
-        _jsonSerializerOptions = new JsonSerializerOptions
-        {
-            WriteIndented = true
-        };
         _connectionInfo = null;
         _carUpdate = null;
         _telemetryListener.Connected += OnConnected;
@@ -80,7 +75,10 @@ public sealed class LearnTrackWizard
                 Point0: new ReferencePoint(p0AcX, p0AcY, p0AcZ, new GpsCoordinate(p0Lat, p0Lon, p0Height)),
                 Point1: new ReferencePoint(p1AcX, p1AcY, p1AcZ, new GpsCoordinate(p1Lat, p1Lon, p1Height)))
         };
-        var json = JsonSerializer.Serialize(singleTrackDictionary, _jsonSerializerOptions);
+        var json = JsonSerializer.Serialize(
+            singleTrackDictionary,
+            typeof(Dictionary<string, TrackReferencePoints>),
+            LearnTrackJsonContext.Default);
 
         Console.WriteLine();
         Console.WriteLine("Add this under appsettings.json -> TracksCoordinates (merge with existing):");
