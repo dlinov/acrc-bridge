@@ -49,7 +49,6 @@ public sealed class ACUdpReader(
             {
                 const int SIO_UDP_CONNRESET = -1744830452;
                 udpClient.Client.IOControl(SIO_UDP_CONNRESET, [0], null);
-                // TODO: should udpServer be added here as well?
             }
 
             var trackName = string.Empty;
@@ -119,19 +118,20 @@ public sealed class ACUdpReader(
                 // 4. Process updates
                 while (!token.IsCancellationRequested)
                 {
-                    var receiveTask = udpClient.ReceiveAsync(token).AsTask();
-                    var timeoutTask = Task.Delay(idleTimeout, token);
-                    var finished = await Task.WhenAny(receiveTask, timeoutTask).ConfigureAwait(false);
-
-                    if (finished == timeoutTask)
+                    UdpReceiveResult result;
+                    try
                     {
-                        // No data received for a while -> treat it as race stopped
+                        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+                        timeoutCts.CancelAfter(idleTimeout);
+                        result = await udpClient.ReceiveAsync(timeoutCts.Token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (!token.IsCancellationRequested)
+                    {
                         Status?.Invoke($"No data for {idleTimeout.TotalSeconds:0}s. Reconnecting...");
                         Connected?.Invoke(ConnectionInfo.Disconnected);
                         break;
                     }
 
-                    var result = await receiveTask.ConfigureAwait(false);
                     if (result.Buffer.Length == ExpectedRTCarInfoSize)
                     {
                         var info = Deserialize<RTCarInfo>(result.Buffer);
@@ -150,9 +150,9 @@ public sealed class ACUdpReader(
                             Gas: info.Gas,
                             Brake: info.Brake,
                             Clutch: invertClutch ? 1 - info.Clutch : info.Clutch,
-                            Longitude: (float)gps.Latitude,
+                            Latitude: (float)gps.Latitude,
                             Altitude: (float)gps.Height,
-                            Latitude: (float)gps.Longitude,
+                            Longitude: (float)gps.Longitude,
                             GamePosX: gameCarX,
                             GamePosY: gameCarY,
                             GamePosZ: gameCarZ,

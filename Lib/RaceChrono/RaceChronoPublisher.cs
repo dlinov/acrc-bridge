@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Threading.Channels;
 using ACRCBridge.Lib.Dto;
 using ACRCBridge.Lib.RaceChrono.GPS;
 using ACRCBridge.Lib.RaceChrono.RC3;
@@ -13,7 +14,14 @@ public sealed class RaceChronoPublisher : ITelemetryPublisher
 {
     private readonly ITelemetryListener _telemetryListener;
     private readonly TcpListener _tcpListener;
-    private readonly ConcurrentDictionary<EndPoint, TcpClient> _clients = new();
+    private readonly ConcurrentDictionary<TcpClient, byte> _clients = new();
+    private readonly Channel<TelemetryBatch> _outbound = Channel.CreateBounded<TelemetryBatch>(
+        new BoundedChannelOptions(16)
+        {
+            SingleReader = true,
+            SingleWriter = false,
+            FullMode = BoundedChannelFullMode.DropOldest
+        });
     private readonly RC3Serializer _rc3Serializer;
     private readonly GpggaSerializer _gpggaSerializer;
     private readonly GprmcSerializer _gprmcSerializer;
@@ -27,8 +35,6 @@ public sealed class RaceChronoPublisher : ITelemetryPublisher
         _bindAddress = ParseBindAddress(bindAddress);
         _port = port;
 
-        // Note: keep the listener alive for the lifetime of this publisher.
-        // TODO: is IDisposable needed here?
         _tcpListener = new TcpListener(_bindAddress, port);
         var culture = RaceChronoUtils.Culture;
         _rc3Serializer = new RC3Serializer(culture);
@@ -38,7 +44,9 @@ public sealed class RaceChronoPublisher : ITelemetryPublisher
 
     public event Action<string>? Status;
 
-    public Task StartAsync(CancellationToken token)
+    internal IPEndPoint LocalEndpoint => (IPEndPoint)_tcpListener.LocalEndpoint;
+
+    public async Task StartAsync(CancellationToken token)
     {
         Status?.Invoke("Starting RaceChrono telemetry publisher");
         if (Interlocked.Exchange(ref _started, 1) == 1)
@@ -50,65 +58,71 @@ public sealed class RaceChronoPublisher : ITelemetryPublisher
 
         _telemetryListener.CarUpdate += BroadcastCarUpdate;
         Status?.Invoke("RaceChrono telemetry publisher hooked to telemetry events.");
-        _tcpListener.Start();
+        try
+        {
+            _tcpListener.Start();
+        }
+        catch
+        {
+            _telemetryListener.CarUpdate -= BroadcastCarUpdate;
+            throw;
+        }
         Status?.Invoke("awaiting RaceChrono connection at " + GetConnectHint());
 
-        // Accept clients in the background.
-        return Task.Run(async () =>
+        using var stopCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var acceptTask = AcceptClientsAsync(stopCts.Token);
+        var broadcastTask = BroadcastTelemetryAsync(stopCts.Token);
+
+        try
         {
+            var completedTask = await Task.WhenAny(acceptTask, broadcastTask).ConfigureAwait(false);
+            await completedTask.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (stopCts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Status?.Invoke("RaceChrono publisher error: " + ex.Message);
+        }
+        finally
+        {
+            await stopCts.CancelAsync().ConfigureAwait(false);
+            _tcpListener.Stop();
+
             try
             {
-                while (!token.IsCancellationRequested)
-                {
-                    TcpClient client;
-                    try
-                    {
-                        client = await _tcpListener.AcceptTcpClientAsync(token);
-                        var clientEndpoint = client.Client.RemoteEndPoint;
-                        if (clientEndpoint != null)
-                        {
-                            _clients.AddOrUpdate(
-                                clientEndpoint,
-                                _ => client,
-                                (_, oldClient) =>
-                                {
-                                    try
-                                    {
-                                        oldClient.Dispose();
-                                    }
-                                    catch (Exception e)
-                                    {
-                                        Console.WriteLine(e);
-                                    }
-                                    return client;
-                                });
-                        }
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        break;
-                    }
-
-                    var remote = client.Client.RemoteEndPoint?.ToString() ?? "(unknown - will not be saved)";
-                    Status?.Invoke($"{DateTime.Now} TCP client connected: {remote}");
-                }
+                await Task.WhenAll(acceptTask, broadcastTask).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (stopCts.IsCancellationRequested)
+            {
             }
             catch (Exception ex)
             {
-                Status?.Invoke("TCP accept loop error: " + ex.Message);
+                Status?.Invoke("RaceChrono publisher shutdown error: " + ex.Message);
             }
-            finally
+
+            _outbound.Writer.TryComplete();
+            _telemetryListener.CarUpdate -= BroadcastCarUpdate;
+            DisposeClients();
+            Status?.Invoke("Stopped RaceChrono telemetry publisher");
+        }
+    }
+
+    private async Task AcceptClientsAsync(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            var client = await _tcpListener.AcceptTcpClientAsync(token).ConfigureAwait(false);
+            if (!_clients.TryAdd(client, 0))
             {
-                try
-                {
-                    _tcpListener.Stop();
-                }
-                catch
-                {
-                    // ignored
-                }
+                client.Dispose();
+                continue;
             }
-        }, token);
+
+            var remote = client.Client.RemoteEndPoint?.ToString() ?? "unknown";
+            Status?.Invoke($"{DateTime.Now} TCP client connected: {remote}");
+        }
     }
 
     private string GetConnectHint()
@@ -133,32 +147,57 @@ public sealed class RaceChronoPublisher : ITelemetryPublisher
         // Send both sentence types over the same TCP stream.
         var nowUtc = DateTime.UtcNow;
 
-        var lat = (double)update.Longitude;
-        var lon = (double)update.Latitude;
+        var lat = (double)update.Latitude;
+        var lon = (double)update.Longitude;
         var altitude = (double)update.Altitude;
 
         var rmc = _gprmcSerializer.Serialize(nowUtc, lat, lon, speedKmh: update.SpeedKmh, courseDeg: 0);
         var gga = _gpggaSerializer.Serialize(nowUtc, lat, lon, altitudeMeters: altitude, fixQuality: 1, satellites: 8, hdop: 1.0);
         var rc3 = _rc3Serializer.Serialize(update, nowUtc, mixedWithNmea: true);
 
-        // Fire-and-forget: don't block the telemetry listener thread.
-        _ = BroadcastToSubscribedClientsAsync(rmc);
-        _ = BroadcastToSubscribedClientsAsync(gga);
-        _ = BroadcastToSubscribedClientsAsync(rc3);
+        _outbound.Writer.TryWrite(new TelemetryBatch(rmc, gga, rc3));
     }
 
-    private async Task BroadcastToSubscribedClientsAsync(byte[] data)
+    private async Task BroadcastTelemetryAsync(CancellationToken token)
     {
-        foreach (var kvp in _clients)
+        await foreach (var batch in _outbound.Reader.ReadAllAsync(token).ConfigureAwait(false))
         {
-            var client = kvp.Value;
-            try
+            var sendTasks = _clients.Keys
+                .Select(client => SendBatchAsync(client, batch, token));
+            await Task.WhenAll(sendTasks).ConfigureAwait(false);
+        }
+    }
+
+    private async Task SendBatchAsync(TcpClient client, TelemetryBatch batch, CancellationToken token)
+    {
+        try
+        {
+            var stream = client.GetStream();
+            await stream.WriteAsync(batch.Rmc, token).ConfigureAwait(false);
+            await stream.WriteAsync(batch.Gga, token).ConfigureAwait(false);
+            await stream.WriteAsync(batch.Rc3, token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            if (_clients.TryRemove(client, out _))
             {
-                await client.Client.SendAsync(data).ConfigureAwait(false);
+                var remote = client.Client.RemoteEndPoint?.ToString() ?? "unknown";
+                client.Dispose();
+                Status?.Invoke($"TCP client disconnected: {remote} ({ex.Message})");
             }
-            catch
+        }
+    }
+
+    private void DisposeClients()
+    {
+        foreach (var client in _clients.Keys)
+        {
+            if (_clients.TryRemove(client, out _))
             {
-                // Ignore per-client send failures.
+                client.Dispose();
             }
         }
     }
@@ -232,4 +271,6 @@ public sealed class RaceChronoPublisher : ITelemetryPublisher
             }
         }
     }
+
+    private readonly record struct TelemetryBatch(byte[] Rmc, byte[] Gga, byte[] Rc3);
 }

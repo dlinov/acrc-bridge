@@ -20,7 +20,7 @@ Idea is simple: read data from AC, find track GPS coordinates, map it to in-game
 - [Issues tab](https://github.com/dlinov/acrc-bridge/issues)
 
 ### CI
-The workflow is in `.github/workflows/dotnet-desktop.yml` (named **CI** in Actions).
+The workflow is in `.github/workflows/ci.yml` (named **CI** in Actions).
 
 ### Creating a release
 Releases are tag-based. After your changes are on `master` and CI is green, create and push a tag like:
