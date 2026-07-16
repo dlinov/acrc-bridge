@@ -25,6 +25,7 @@ public sealed class RaceChronoPublisher : ITelemetryPublisher
     private readonly RC3Serializer _rc3Serializer;
     private readonly GpggaSerializer _gpggaSerializer;
     private readonly GprmcSerializer _gprmcSerializer;
+    private readonly GpsCourseCalculator _courseCalculator = new();
     private readonly IPAddress _bindAddress;
     private readonly int _port;
     private int _started;
@@ -57,6 +58,7 @@ public sealed class RaceChronoPublisher : ITelemetryPublisher
         }
 
         _telemetryListener.CarUpdate += BroadcastCarUpdate;
+        _telemetryListener.Connected += ResetCourse;
         Status?.Invoke("RaceChrono telemetry publisher hooked to telemetry events.");
         try
         {
@@ -65,6 +67,7 @@ public sealed class RaceChronoPublisher : ITelemetryPublisher
         catch
         {
             _telemetryListener.CarUpdate -= BroadcastCarUpdate;
+            _telemetryListener.Connected -= ResetCourse;
             throw;
         }
         Status?.Invoke("awaiting RaceChrono connection at " + GetConnectHint());
@@ -104,6 +107,7 @@ public sealed class RaceChronoPublisher : ITelemetryPublisher
 
             _outbound.Writer.TryComplete();
             _telemetryListener.CarUpdate -= BroadcastCarUpdate;
+            _telemetryListener.Connected -= ResetCourse;
             DisposeClients();
             Status?.Invoke("Stopped RaceChrono telemetry publisher");
         }
@@ -147,16 +151,19 @@ public sealed class RaceChronoPublisher : ITelemetryPublisher
         // Send both sentence types over the same TCP stream.
         var nowUtc = DateTime.UtcNow;
 
-        var lat = (double)update.Latitude;
-        var lon = (double)update.Longitude;
+        var lat = update.Latitude;
+        var lon = update.Longitude;
         var altitude = (double)update.Altitude;
+        var courseDegrees = _courseCalculator.Update(lat, lon, update.SpeedKmh);
 
-        var rmc = _gprmcSerializer.Serialize(nowUtc, lat, lon, speedKmh: update.SpeedKmh, courseDeg: 0);
+        var rmc = _gprmcSerializer.Serialize(nowUtc, lat, lon, update.SpeedKmh, courseDegrees);
         var gga = _gpggaSerializer.Serialize(nowUtc, lat, lon, altitudeMeters: altitude, fixQuality: 1, satellites: 8, hdop: 1.0);
         var rc3 = _rc3Serializer.Serialize(update, nowUtc, mixedWithNmea: true);
 
         _outbound.Writer.TryWrite(new TelemetryBatch(rmc, gga, rc3));
     }
+
+    private void ResetCourse(ConnectionInfo _) => _courseCalculator.Reset();
 
     private async Task BroadcastTelemetryAsync(CancellationToken token)
     {

@@ -7,6 +7,19 @@ Idea is simple: read data from AC, find track GPS coordinates, map it to in-game
 ### Requirements
 - .NET 10 SDK: `winget install Microsoft.DotNet.SDK.10`
 
+### RaceChrono setup
+Add a **RaceChrono DIY** device using a TCP/IP connection:
+
+- Host: the address printed as `awaiting RaceChrono connection at ...` by the bridge
+- Port: `Bridge:Port` from `appsettings.json` (`19996` by default)
+- NMEA 0183: enabled (GPS position, speed and bearing)
+- RC2/RC3: enabled (RPM, acceleration, gear and analog channels)
+
+RPM uses RC3's fixed `rpm/d1` (`Digital 1/RPM`) field. If the bridge dashboard shows
+a non-zero RPM but RaceChrono does not, verify that RC2/RC3 is enabled and select the
+RPM channel in the RaceChrono live screen or analysis view. If the dashboard also shows
+zero RPM, the value is not arriving from Assetto Corsa.
+
 ### Useful links
 - [RaceChrono forum thread "Assetto Corsa?"](https://racechrono.com/forum/discussion/1892/assetto-corsa)
 - [RaceChrono article "Tutorial: DIY devices"](https://racechrono.com/article/2572)
