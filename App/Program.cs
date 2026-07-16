@@ -8,9 +8,7 @@ using ACRCBridge.Lib.Coordinates;
 using ACRCBridge.Lib.RaceChrono;
 using Microsoft.Extensions.Configuration;
 
-// TODO: Add command-line arguments for:
-// - choice of data collection method (memory-mapped file vs. UDP)
-// - writing collected data to a file (TODO: how to replay this correctly?)
+// TODO: Define a telemetry recording format before adding record/replay CLI options.
 
 Console.WriteLine("Starting Assetto Corsa - RaceChrono bridge. Press Ctrl+C to stop at any time...");
 var cliArgs = Environment.GetCommandLineArgs().Skip(1).ToArray();
@@ -53,14 +51,13 @@ var acTelemetryListener = new ACUdpReader(
     coordinateConverters: convertersCollection);
 var rcTelemetryPublisher = new RaceChronoPublisher(bridgePort, acTelemetryListener, bridgeBindAddress);
 
-#pragma warning disable CS8524 // The switch expression does not handle some values of its input type (it is not exhaustive) involving an unnamed enum value.
 var uiTask = appMode switch
-#pragma warning restore CS8524 // The switch expression does not handle some values of its input type (it is not exhaustive) involving an unnamed enum value.
 {
     AppMode.Bridge =>
         RunDashboardAsync(acTelemetryListener, rcTelemetryPublisher),
     AppMode.LearnTrack =>
         RunLearnTrackAsync(acTelemetryListener),
+    _ => throw new ArgumentOutOfRangeException(nameof(appMode), appMode, "Unsupported application mode."),
 };
 var readerTask = acTelemetryListener.StartAsync(cts.Token);
 var pubTask = rcTelemetryPublisher.StartAsync(cts.Token);

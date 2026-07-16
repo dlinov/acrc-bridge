@@ -57,15 +57,11 @@ public sealed class GeoConverterTests
         Console.WriteLine($"Converted Start AC to GPS Coordinates: Lat={gpsStartCoord.Latitude}, Lon={gpsStartCoord.Longitude}, Height={gpsStartCoord.Height}");
         Console.WriteLine($"Converted Further AC to GPS Coordinates: Lat={gpsFurtherCoord.Latitude}, Lon={gpsFurtherCoord.Longitude}, Height={gpsFurtherCoord.Height}");
 
-        // Assert that the converted coordinates are within a small margin of error
-        const double delta = 0.001; // Acceptable error margin in degrees
+        const double maxHorizontalErrorMeters = 10;
         const double deltaH = 0.2; // Height is less precise due to less precise data source
-        Assert.AreEqual(ZeroLat, gpsZeroCoord.Latitude, delta, "Latitude conversion is incorrect.");
-        Assert.AreEqual(ZeroLon, gpsZeroCoord.Longitude, delta, "Longitude conversion is incorrect.");
-        Assert.AreEqual(StartLat, gpsStartCoord.Latitude, delta, "Latitude conversion is incorrect.");
-        Assert.AreEqual(StartLon, gpsStartCoord.Longitude, delta, "Longitude conversion is incorrect.");
-        Assert.AreEqual(FurtherLat, gpsFurtherCoord.Latitude, delta, "Latitude conversion is incorrect.");
-        Assert.AreEqual(FurtherLon, gpsFurtherCoord.Longitude, delta, "Longitude conversion is incorrect.");
+        AssertGpsWithinMeters(ZeroLat, ZeroLon, gpsZeroCoord, maxHorizontalErrorMeters);
+        AssertGpsWithinMeters(StartLat, StartLon, gpsStartCoord, maxHorizontalErrorMeters);
+        AssertGpsWithinMeters(FurtherLat, FurtherLon, gpsFurtherCoord, maxHorizontalErrorMeters);
         Assert.AreEqual(ZeroHeight, gpsZeroCoord.Height, deltaH, "Height conversion is incorrect.");
         Assert.AreEqual(StartHeight, gpsStartCoord.Height, deltaH, "Height conversion is incorrect.");
         Assert.AreEqual(FurtherHeight, gpsFurtherCoord.Height, deltaH, "Height conversion is incorrect.");
@@ -107,5 +103,27 @@ public sealed class GeoConverterTests
         Assert.IsInRange(58.39, 58.42, outFurther.Latitude);
         Assert.IsInRange(24.43, 24.47, outFurther.Longitude);
         Assert.IsInRange(5.5, 6.5, outFurther.Height);
+    }
+
+    private static void AssertGpsWithinMeters(
+        double expectedLatitude,
+        double expectedLongitude,
+        GpsCoordinate actual,
+        double maxDistanceMeters)
+    {
+        const double earthRadiusMeters = 6_378_137;
+        var latitude0 = expectedLatitude * Math.PI / 180;
+        var latitude1 = actual.Latitude * Math.PI / 180;
+        var deltaLatitude = (actual.Latitude - expectedLatitude) * Math.PI / 180;
+        var deltaLongitude = (actual.Longitude - expectedLongitude) * Math.PI / 180;
+        var haversine = Math.Pow(Math.Sin(deltaLatitude / 2), 2) +
+                        Math.Cos(latitude0) * Math.Cos(latitude1) *
+                        Math.Pow(Math.Sin(deltaLongitude / 2), 2);
+        var distance = 2 * earthRadiusMeters * Math.Asin(Math.Sqrt(haversine));
+
+        Assert.IsLessThanOrEqualTo(
+            maxDistanceMeters,
+            distance,
+            $"Expected ({expectedLatitude}, {expectedLongitude}), got ({actual.Latitude}, {actual.Longitude}).");
     }
 }

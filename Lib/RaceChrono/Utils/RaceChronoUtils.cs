@@ -20,8 +20,8 @@ internal static class RaceChronoUtils
         latDeg = Math.Abs(latDeg);
         var deg = (int)Math.Floor(latDeg);
         var minutes = (latDeg - deg) * 60.0;
-        // ddmm.mmm
-        var field = string.Format(Culture, "{0:00}{1:00.000}", deg, minutes);
+        // ddmm.mmmmm
+        var field = string.Format(Culture, "{0:00}{1:00.00000}", deg, minutes);
         return (field, hem);
     }
 
@@ -31,8 +31,8 @@ internal static class RaceChronoUtils
         lonDeg = Math.Abs(lonDeg);
         var deg = (int)Math.Floor(lonDeg);
         var minutes = (lonDeg - deg) * 60.0;
-        // dddmm.mmm
-        var field = string.Format(Culture, "{0:000}{1:00.000}", deg, minutes);
+        // dddmm.mmmmm
+        var field = string.Format(Culture, "{0:000}{1:00.00000}", deg, minutes);
         return (field, hem);
     }
 
