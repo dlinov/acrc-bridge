@@ -17,6 +17,7 @@ public sealed class ACUdpReader(
     TimeSpan handshakeRetryTimeout,
     TimeSpan idleTimeout,
     GeoConvertersCollection coordinateConverters,
+    bool requireCoordinateConverter = true,
     IPhysicsSnapshotSource? physicsSource = null
 ) : ITelemetryListener
 {
@@ -97,18 +98,26 @@ public sealed class ACUdpReader(
                 if (!connected || token.IsCancellationRequested)
                     continue;
 
-                GeoConverter coordinatesConverter;
+                GeoConverter? coordinatesConverter;
                 try
                 {
                     coordinatesConverter = coordinateConverters.GetConverter(trackName);
                 }
                 catch (NotSupportedException ex)
                 {
-                    // We connected to AC, read the track name, but can't convert coordinates for the track.
-                    // Exit the loop so StartAsync completes and the app can terminate.
-                    Status?.Invoke($"FATAL: {ex.Message}\nPlease add track reference points to config");
-                    Error?.Invoke(ex);
-                    return;
+                    if (requireCoordinateConverter)
+                    {
+                        // We connected to AC, read the track name, but can't convert coordinates for the track.
+                        // Exit the loop so StartAsync completes and the app can terminate.
+                        Status?.Invoke($"FATAL: {ex.Message}\nPlease add track reference points to config");
+                        Error?.Invoke(ex);
+                        return;
+                    }
+
+                    // Track learning needs only the raw in-game coordinates, so keep streaming
+                    // updates (without GPS conversion) even before the track has reference points.
+                    coordinatesConverter = null;
+                    Status?.Invoke($"Track '{trackName}' has no GPS mapping yet; streaming raw game coordinates for track learning.");
                 }
 
                 // 3. Subscribe to updates
@@ -140,7 +149,7 @@ public sealed class ACUdpReader(
                         var gameCarX = info.CarCoordinatesX;
                         var gameCarY = info.CarCoordinatesY;
                         var gameCarZ = info.CarCoordinatesZ;
-                        var gps = coordinatesConverter.FromGameCoordinates(gameCarX, gameCarY, gameCarZ);
+                        var gps = coordinatesConverter?.FromGameCoordinates(gameCarX, gameCarY, gameCarZ);
                         CarUpdate?.Invoke(new CarUpdate(
                             SpeedKmh: info.SpeedKmh,
                             EngineRpm: info.EngineRPM,
@@ -152,9 +161,9 @@ public sealed class ACUdpReader(
                             Gas: info.Gas,
                             Brake: info.Brake,
                             Clutch: invertClutch ? 1 - info.Clutch : info.Clutch,
-                            Latitude: gps.Latitude,
-                            Altitude: (float)gps.Height,
-                            Longitude: gps.Longitude,
+                            Latitude: gps?.Latitude ?? 0,
+                            Altitude: (float)(gps?.Height ?? 0),
+                            Longitude: gps?.Longitude ?? 0,
                             GamePosX: gameCarX,
                             GamePosY: gameCarY,
                             GamePosZ: gameCarZ,
