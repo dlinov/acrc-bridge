@@ -54,6 +54,7 @@ var acTelemetryListener = new ACUdpReader(
     handshakeRetryTimeout: acConfig.HandshakeRetryTimeout,
     idleTimeout: acConfig.IdleTimeout,
     coordinateConverters: convertersCollection,
+    requireCoordinateConverter: appMode == AppMode.Bridge,
     physicsSource: sharedMemoryReader);
 var rcTelemetryPublisher = new RaceChronoPublisher(bridgePort, acTelemetryListener, bridgeBindAddress, bridgeRc3Channels);
 
@@ -92,8 +93,19 @@ Task RunDashboardAsync(ITelemetryListener telemetryListener, ITelemetryPublisher
     return Dashboard.RunDashboardAsync(state, cts.Token);
 }
 
-Task RunLearnTrackAsync(ITelemetryListener telemetryListener)
+async Task RunLearnTrackAsync(ITelemetryListener telemetryListener)
 {
+    telemetryListener.Status += msg => Console.WriteLine($"[bridge] {msg}");
+    telemetryListener.Error += ex => Console.WriteLine($"[bridge] ERROR: {ex.Message}");
     var trackWizard = new LearnTrackWizard(telemetryListener, acConfig.HandshakeRetryTimeout);
-    return trackWizard.RunLearnTrackAsync(cts.Token);
+    try
+    {
+        await trackWizard.RunLearnTrackAsync(cts.Token);
+    }
+    finally
+    {
+        // Wizard finished (or telemetry was lost): cancel so the reader/publisher
+        // loops stop and the app exits instead of hanging on Task.WhenAll.
+        await cts.CancelAsync();
+    }
 }
