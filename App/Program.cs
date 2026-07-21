@@ -3,6 +3,7 @@ using ACRCBridge.App.Configuration;
 using ACRCBridge.App.Dashboard;
 using ACRCBridge.App.LearnTrack;
 using ACRCBridge.Lib;
+using ACRCBridge.Lib.AssettoCorsa.SharedMemory;
 using ACRCBridge.Lib.AssettoCorsa.Udp;
 using ACRCBridge.Lib.Coordinates;
 using ACRCBridge.Lib.RaceChrono;
@@ -37,9 +38,13 @@ var gamesConfig = appConfig.Games;
 var bridgePort = appConfig.Bridge.Port;
 var trackConfigs = appConfig.Tracks;
 var bridgeBindAddress = appConfig.Bridge.BindAddress;
+var bridgeRc3Channels = appConfig.Bridge.Rc3Channels;
 var acConfig = gamesConfig.AssettoCorsa;
 var trackDtos = trackConfigs.Select(kv => (kv.Key, kv.Value.AsDto)).ToDictionary();
 var convertersCollection = new GeoConvertersCollection(trackDtos);
+
+// When Assetto Corsa runs on this machine, read its shared memory for channels the UDP API omits.
+using var sharedMemoryReader = acConfig.SameMachineWithAC ? new ACSharedMemoryReader() : null;
 
 var acTelemetryListener = new ACUdpReader(
     acHost: acConfig.Host,
@@ -48,8 +53,9 @@ var acTelemetryListener = new ACUdpReader(
     handshakeWaitTimeout: acConfig.HandshakeWaitTimeout,
     handshakeRetryTimeout: acConfig.HandshakeRetryTimeout,
     idleTimeout: acConfig.IdleTimeout,
-    coordinateConverters: convertersCollection);
-var rcTelemetryPublisher = new RaceChronoPublisher(bridgePort, acTelemetryListener, bridgeBindAddress);
+    coordinateConverters: convertersCollection,
+    physicsSource: sharedMemoryReader);
+var rcTelemetryPublisher = new RaceChronoPublisher(bridgePort, acTelemetryListener, bridgeBindAddress, bridgeRc3Channels);
 
 var uiTask = appMode switch
 {

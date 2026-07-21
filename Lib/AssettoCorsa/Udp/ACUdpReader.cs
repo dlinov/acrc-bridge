@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using ACRCBridge.Lib.Dto;
 using ACRCBridge.Lib.AssettoCorsa.Udp.Models;
+using ACRCBridge.Lib.AssettoCorsa.SharedMemory;
 using ACRCBridge.Lib.Coordinates;
 
 namespace ACRCBridge.Lib.AssettoCorsa.Udp;
@@ -15,7 +16,8 @@ public sealed class ACUdpReader(
     TimeSpan handshakeWaitTimeout,
     TimeSpan handshakeRetryTimeout,
     TimeSpan idleTimeout,
-    GeoConvertersCollection coordinateConverters
+    GeoConvertersCollection coordinateConverters,
+    IPhysicsSnapshotSource? physicsSource = null
 ) : ITelemetryListener
 {
     private readonly IPEndPoint _acEndPoint = new(IPAddress.Parse(acHost), acPort);
@@ -160,7 +162,10 @@ public sealed class ACUdpReader(
                             PosNormalized: info.CarPositionNormalized,
                             AccGVertical: info.AccGVertical,
                             AccGHorizontal: info.AccGHorizontal,
-                            AccGFrontal: info.AccGFrontal));
+                            AccGFrontal: info.AccGFrontal,
+                            Physics: physicsSource is not null && physicsSource.TryGetSnapshot(out var extras)
+                                ? extras
+                                : null));
                     }
                     else if (result.Buffer.Length == ExpectedRTLapSize)
                     {

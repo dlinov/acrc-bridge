@@ -30,7 +30,11 @@ public sealed class RaceChronoPublisher : ITelemetryPublisher
     private readonly int _port;
     private int _started;
 
-    public RaceChronoPublisher(int port, ITelemetryListener telemetryListener, string? bindAddress = null)
+    public RaceChronoPublisher(
+        int port,
+        ITelemetryListener telemetryListener,
+        string? bindAddress = null,
+        IReadOnlyDictionary<string, string>? rc3Channels = null)
     {
         _telemetryListener = telemetryListener;
         _bindAddress = ParseBindAddress(bindAddress);
@@ -38,7 +42,7 @@ public sealed class RaceChronoPublisher : ITelemetryPublisher
 
         _tcpListener = new TcpListener(_bindAddress, port);
         var culture = RaceChronoUtils.Culture;
-        _rc3Serializer = new RC3Serializer(culture);
+        _rc3Serializer = new RC3Serializer(culture, rc3Channels);
         _gpggaSerializer = new GpggaSerializer(culture);
         _gprmcSerializer = new GprmcSerializer(culture);
     }
