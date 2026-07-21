@@ -6,4 +6,5 @@ internal sealed record AssettoCorsaConfig(
     bool InvertClutch,
     TimeSpan HandshakeWaitTimeout,
     TimeSpan HandshakeRetryTimeout,
-    TimeSpan IdleTimeout);
+    TimeSpan IdleTimeout,
+    bool SameMachineWithAC = false);

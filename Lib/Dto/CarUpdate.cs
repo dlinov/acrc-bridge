@@ -21,5 +21,6 @@ public readonly record struct CarUpdate(
     float Slope,
     float AccGVertical,
     float AccGHorizontal,
-    float AccGFrontal);
+    float AccGFrontal,
+    AcPhysicsExtras? Physics = null);
     
